@@ -1,11 +1,28 @@
 import cv2
 from src.models.Counter import Counter
 from src.models.DetectedObject import DetectedObject
+import yaml
+import os
 
-# --- Konfigurace ---
-VIDEO_FOLDER = 'C:\\Users\\janho\\Documents\\TUL\\FM\\BP\\counter\\data\\videos\\'
-OUTPUT_FOLDER = 'C:\\Users\\janho\\Documents\\TUL\\FM\\BP\\counter\\data\\output\\'
-MODEL_PATH = "models/yolov5n_v2/weights/best.pt" 
+CONFIG_PATH = 'conf.yaml'
+
+try:
+    with open(CONFIG_PATH, 'r') as file:
+        config = yaml.safe_load(file)
+except FileNotFoundError:
+    print(f"Konfigurační soubor '{CONFIG_PATH}' nebyl nalezen.")
+    exit(1)
+paths = config.get('paths', {})
+VIDEO_FOLDER = paths.get('video_folder', '..\\data\\videos\\')
+OUTPUT_FOLDER = paths.get('output_folder', '..\\data\\output\\')
+MODEL_PATH = paths.get('model_path', f"models/yolov8s/weights/best.pt")
+
+parameters = config.get('parameters', {})
+CONFIDENCE_THRESHOLD = float(parameters.get('confidence_threshold', 0.4))
+IOU_THRESHOLD = float(parameters.get('iou_threshold', 0.5))
+IOU_THRESHOLD = float(parameters.get('iou_threshold', 0.5))
+GREY_ZONE_SIZE = float(parameters.get('grey_zone_size', 20.0))
+DEVICE = parameters.get('device', 'cpu')  # 'cpu' nebo "0"
 
 
 def main(*args, **kwargs):
@@ -32,7 +49,10 @@ def main(*args, **kwargs):
     counter = Counter(
         model_path=MODEL_PATH,
         lines=lines,
-        min_distance=20.0
+        min_distance=GREY_ZONE_SIZE,
+        confidence=CONFIDENCE_THRESHOLD,
+        iou=IOU_THRESHOLD,
+        device=DEVICE
     )
     
     # Příprava výstupu
@@ -82,4 +102,5 @@ def main(*args, **kwargs):
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(*sys.argv[1:])

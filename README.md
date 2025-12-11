@@ -45,6 +45,19 @@ counter/
 ```
 
 ## Použití
+
+### Konfigurace
+Je potřeba nastavit hodnoty v `conf.yaml`. Příklad struktury souboru lze nalézt v `conf.example.yaml`.
+
+### Virtuální prostředí
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+```
+
+### Spuštění
 ```bash
 python -m src.main <video_filename>
 ```
@@ -53,3 +66,22 @@ nebo bez argumentu pro výchozí video:
 ```bash
 python -m src.main
 ```
+
+## Architektura
+
+![Architecture Diagram](./assets/counter_architecture.png)
+
+- **Hierarchie tříd** - `Counter` jako hlavní API zapouzdřuje `ObjectTracker` (správa YOLO detekce) a jeden či více `LineCounter` (počítání průchodů), přičemž každý sledovaný objekt je reprezentován třídou `DetectedObject`
+- **Tok dat** - video frame vstupuje do `ObjectTracker`, kde YOLO model detekuje objekty a přiřazuje jim unikátní ID; ty jsou následně předány všem `LineCounter` instancím, které nezávisle vyhodnocují průchody přes své čáry
+- **Logika počítání** - diagram vizualizuje, jak `LineCounter` určuje stranu objektu vůči čáře (±1) pomocí znaménkové vzdálenosti a započítává průchod (IN/OUT) při změně strany mimo mrtvou zónu
+
+## Výsledky trénování
+modely byly trénovány na datasetu složeném z vlastních záznamů a veřejně dostupných datasetů s anotacemi pro třídy turistů, lyžařů, cyklistů a psů. Tréninková sada obsahovala přes 9000 anotovaných obrázků.
+![Label Distribution](./assets/labels.jpg)
+
+### YOLOv8s
+![Training Results](./assets/training_results.png)
+
+### YOLOv5n
+![Training Results](./assets/training_results_yolov5n.png)
+
