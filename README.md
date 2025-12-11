@@ -12,11 +12,6 @@ Systém pro automatické počítání průchodů objektů přes definované čá
 - Vizualizace trajektorií a počtů
 - Export anotovaného videa
 
-## Instalace
-```bash
-pip install -r requirements.txt
-```
-
 ## Třídy objektů
 
 | ID | Třída | Barva |
@@ -26,23 +21,6 @@ pip install -r requirements.txt
 | 2 | cyclist | Modrá |
 | 3 | tourist_dog | Žlutá |
 
-## Struktura projektu
-```
-counter/
-├── src/
-│   ├── main.py
-│   └── models/
-│       ├── Counter.py
-│       ├── LineCounter.py
-│       ├── ObjectTracker.py
-│       └── DetectedObject.py
-├── models/
-│   └── yolov5n_v2/
-│           └── weights/
-│               └── best.pt
-└── data/
-    └── videos/
-```
 
 ## Použití
 
@@ -75,13 +53,30 @@ python -m src.main
 - **Tok dat** - video frame vstupuje do `ObjectTracker`, kde YOLO model detekuje objekty a přiřazuje jim unikátní ID; ty jsou následně předány všem `LineCounter` instancím, které nezávisle vyhodnocují průchody přes své čáry
 - **Logika počítání** - diagram vizualizuje, jak `LineCounter` určuje stranu objektu vůči čáře (±1) pomocí znaménkové vzdálenosti a započítává průchod (IN/OUT) při změně strany mimo mrtvou zónu
 
+## Struktura projektu
+```
+counter/
+├── src/
+│   ├── main.py
+│   └── models/
+│       ├── Counter.py
+│       ├── LineCounter.py
+│       ├── ObjectTracker.py
+│       └── DetectedObject.py
+├── models/
+│   └── yolov5n_v2/
+│           └── weights/
+│               └── best.pt
+└── data/
+    └── videos/
+```
+
 ## Výsledky trénování
 modely byly trénovány na datasetu složeném z vlastních záznamů a veřejně dostupných datasetů s anotacemi pro třídy turistů, lyžařů, cyklistů a psů. Tréninková sada obsahovala přes 9000 anotovaných obrázků.
 ![Label Distribution](./assets/labels.jpg)
 
 ### YOLOv8s
-![Training Results](./assets/training_results.png)
+![Training Results](./assets/results_yolov8s.png)
 
 ### YOLOv5n
-![Training Results](./assets/training_results_yolov5n.png)
-
+![Training Results](./assets/results_yolov5n.png)
