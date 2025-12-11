@@ -5,7 +5,7 @@ import torch
 import cv2
 import numpy as np
 
-from src.models.DetectedObject import DetectedObject
+from src.core.DetectedObject import DetectedObject
 
 class ObjectState:
     """Stav sledovaného objektu vůči jedné čáře"""

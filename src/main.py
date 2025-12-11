@@ -1,6 +1,6 @@
 import cv2
-from src.models.Counter import Counter
-from src.models.DetectedObject import DetectedObject
+from src.core.Counter import Counter
+from src.core.DetectedObject import DetectedObject
 import yaml
 import os
 

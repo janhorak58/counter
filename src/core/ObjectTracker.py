@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict
 from ultralytics import YOLO
-from src.models.DetectedObject import DetectedObject
+from src.core.DetectedObject import DetectedObject
 
 
 class ObjectTracker:

@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 import torch
 from typing import Tuple, Dict, List, Optional
-from src.models.ObjectTracker import ObjectTracker
-from src.models.LineCounter import LineCounter
-from src.models.DetectedObject import DetectedObject
+from src.core.ObjectTracker import ObjectTracker
+from src.core.LineCounter import LineCounter
+from src.core.DetectedObject import DetectedObject
 
 class Counter:
     """Hlavní API pro počítání průchodů - podporuje více čar"""
