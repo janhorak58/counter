@@ -10,7 +10,7 @@ class Counter:
     """Hlavní API pro počítání průchodů - podporuje více čar"""
     
     def __init__(self, model_path: str, lines: List[Dict], 
-                 min_distance: float = 20.0, device: str = 'cpu', confidence: float = 0.4, iou: float = 0.5):
+                 min_distance: float = 20.0, device: str = 'cpu', confidence: float = 0.4, iou: float = 0.5, pretrained=False):
         """
         Args:
             model_path: Cesta k YOLO modelu
@@ -19,10 +19,11 @@ class Counter:
             min_distance: Minimální vzdálenost od čáry
             device: 'cpu' nebo 'cuda'
         """
-        self.tracker = ObjectTracker(model_path, confidence, iou, device)
+        self.tracker = ObjectTracker(model_path, confidence, iou, device, pretrained=pretrained)
         self.device = device
         self.min_distance = min_distance
         self.frame_num = 0
+        self.pretrained = pretrained
         
         # Vytvoření LineCounterů pro každou čáru
         self.line_counters: Dict[str, LineCounter] = {}

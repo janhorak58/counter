@@ -7,7 +7,7 @@ from typing import Tuple, List, Optional
 class DetectedObject:
     """Reprezentuje detekovaný a sledovaný objekt"""
     MAX_FRAME_HISTORY = 30  # Počet snímků pro historii pozic
-    class_names = {0: 'tourist', 1: 'skier', 2: 'cyclist', 3: 'tourist_dog'}
+    class_names = {0: 'tourist', 1: 'skier', 2: 'cyclist', 3: 'tourist_dog', 4: "person", 5:"skis", 6:"bicycle", 7:"dog"}
     colors = {0: (0, 255, 0), 1: (0, 0, 255), 2: (255, 0, 0), 3: (255, 255, 0)}
     
     def __init__(self, obj_id: int, class_id: int, bbox, confidence: float, device='cpu'):
@@ -44,7 +44,7 @@ class DetectedObject:
         self.bbox = torch.tensor(bbox, dtype=torch.float32).to(self.device)
         self.centroid = self._compute_centroid()
         self.confidence = confidence
-        
+
         # Uložení pozice do historie
         self.positions.append(self.get_centroid_int())
         if len(self.positions) > self.MAX_FRAME_HISTORY:

@@ -9,3 +9,5 @@ models/
 mess
 .env
 conf.yaml
+config.yaml
+*.csv

@@ -12,6 +12,8 @@ class ObjectState:
     def __init__(self):
         self.initial_side: Optional[int] = None
         self.counted: bool = False
+        self.last_side: Optional[int] = None
+        self.counted_direction: Optional[str] = None
 
 class LineCounter:
     """Počítá průchody objektů přes definovanou čáru"""
@@ -58,43 +60,58 @@ class LineCounter:
             return -1
     
     def check_crossing(self, obj: DetectedObject) -> Optional[str]:
-        """Zkontroluje průchod objektu přes TUTO čáru"""
+        """Zkontroluje pr?chod objektu p?es TUTO ??ru"""
         obj_id = obj.id
         
-        # Inicializace stavu pro nový objekt
+        # Inicializace stavu pro nov? objekt
         if obj_id not in self.object_states:
             self.object_states[obj_id] = ObjectState()
         
         state : ObjectState = self.object_states[obj_id]
         
-        # Už započítán na této čáře
-        if state.counted:
-            return None
-        
         current_side = self.get_side(obj.centroid)
         
-        # Nastavení initial_side
         if state.initial_side is None:
             if current_side != 0:
                 state.initial_side = current_side
+                state.last_side = current_side
             return None
         
-        # Kontrola průchodu
-        if current_side != 0 and current_side != state.initial_side:
-            obj.counted_direction = current_side
-            if state.initial_side == -1 and current_side == 1:
-                direction = 'in'
-            else:
-                direction = 'out'
+        if current_side == 0:
+            return None
+        
+        if state.last_side is None:
+            state.last_side = current_side
+            return None
+        
+        if current_side != state.last_side:
+            if not state.counted:
+                if state.initial_side == -1 and current_side == 1:
+                    direction = 'in'
+                else:
+                    direction = 'out'
+                
+                state.counted = True
+                state.counted_direction = direction
+                obj.counted_direction = current_side
+                
+                if direction == 'in':
+                    self.counts_in[obj.class_id] += 1
+                else:
+                    self.counts_out[obj.class_id] += 1
+                state.last_side = current_side
+                return direction
             
-            state.counted = True
-            
-            if direction == 'in':
-                self.counts_in[obj.class_id] += 1
-            else:
-                self.counts_out[obj.class_id] += 1
-            
-            return direction
+            if current_side == state.initial_side and state.counted_direction:
+                if state.counted_direction == 'in':
+                    self.counts_in[obj.class_id] = max(0, self.counts_in[obj.class_id] - 1)
+                else:
+                    self.counts_out[obj.class_id] = max(0, self.counts_out[obj.class_id] - 1)
+                state.counted = False
+                state.counted_direction = None
+                obj.counted_direction = None
+            state.last_side = current_side
+            return None
         
         return None
     
