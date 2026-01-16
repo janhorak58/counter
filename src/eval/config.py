@@ -10,13 +10,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "plots": False,
     "map_pretrained_counts": False,
     "run_yolo_eval": False,
+    "run_model_eval": False,
+    "model_type": "yolo",
     "yolo_mode": "custom",
+    "model_mode": "custom",
     "model_path": "models/yolov8s/weights/best.pt",
     "data_yaml": "data/data.yaml",
     "device": "cpu",
     "conf": 0.25,
     "iou": 0.6,
     "split": "val",
+    "rfdetr_box_format": "xyxy",
+    "rfdetr_box_normalized": "auto",
 }
 
 

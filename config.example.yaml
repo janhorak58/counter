@@ -1,3 +1,19 @@
+#+#+#+#+############################################################
+# Options (multi-choice fields):
+# - eval.model_type: yolo | rfdetr
+# - eval.model_mode: custom | pretrained
+# - eval.yolo_mode: custom | pretrained
+# - eval.rfdetr_box_format: xyxy | xywh | cxcywh
+# - eval.rfdetr_box_normalized: auto | true | false
+# - eval.device: cpu | gpu | <gpu_id>
+# - train.model_type: yolo | rfdetr
+# - train.device: cpu | gpu | <gpu_id>
+# - predict.parameters.mode: custom | pretrained
+# - predict.parameters.model_type: yolo | rfdetr
+# - predict.parameters.device: cpu | gpu | <gpu_id>
+# - predict.parameters.rfdetr_box_format: xyxy | xywh | cxcywh
+# - predict.parameters.rfdetr_box_normalized: auto | true | false
+#+#+#+#+############################################################
 eval:
     gt_folder: data/results/gt
     pred_folder: data/results/predicted
@@ -5,14 +21,20 @@ eval:
     plots: true
     map_pretrained_counts: false
     run_yolo_eval: false
+    run_model_eval: false
+    model_type: yolo
     yolo_mode: custom
+    model_mode: custom
     model_path: models/yolov8n_v2/weights/best.pt
     data_yaml: data/data.yaml
     device: cpu
     conf: 0.25        
     iou: 0.6
     split: val
+    rfdetr_box_format: xyxy
+    rfdetr_box_normalized: auto
 train:
+    model_type: yolo
     model: "yolov8n.pt"
     data_yaml: "data/data.yaml"
     epochs: 100
@@ -39,4 +61,18 @@ prediction:
         grey_zone_size: 20.0
         device: "cpu"
         mode: "custom"  # options: "pretrained", "custom"
+        use_interactive_lines: false
+        num_lines: 1
+        lines:
+            - start: [846, 404]
+              end: [1328, 456]
+              name: "Line_1"
+        show_window: false
+        progress_every_n_frames: 100
+        model_type: "yolo"
+        track_iou_threshold: 0.3
+        track_max_lost: 15
+        track_match_classes: true
+        rfdetr_box_format: "xyxy"
+        rfdetr_box_normalized: "auto"
 

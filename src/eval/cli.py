@@ -16,6 +16,7 @@ from src.eval.plots import (
     save_scores_plot,
     save_tmr_plot,
 )
+from src.eval.rfdetr_eval import evaluate_rfdetr_custom, evaluate_rfdetr_mapped
 from src.eval.yolo_eval import evaluate_yolo_custom, evaluate_yolo_mapped, evaluate_yolo_standard
 
 
@@ -24,7 +25,7 @@ def _ensure_dir(path: str) -> None:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Evaluate counting results and YOLO model metrics.")
+    parser = argparse.ArgumentParser(description="Evaluate counting results and detector model metrics.")
     parser.add_argument("--config", default="config.yaml")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -76,79 +77,133 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         save_diff_stats_plot(stats, os.path.join(plots_dir, "diff_stats.png"), "Diff stats")
         print(f"Saved plots to: {plots_dir}")
 
-    if cfg["run_yolo_eval"]:
+    run_model_eval = bool(cfg.get("run_model_eval", False) or cfg.get("run_yolo_eval", False))
+    if run_model_eval:
         model_path = cfg["model_path"]
+        model_type = str(cfg.get("model_type", "yolo")).lower()
+        model_mode = str(cfg.get("model_mode", cfg.get("yolo_mode", "custom"))).lower()
+        rfdetr_box_format = cfg.get("rfdetr_box_format", "xyxy")
+        rfdetr_box_normalized = cfg.get("rfdetr_box_normalized", "auto")
         model_name = os.path.splitext(os.path.basename(model_path))[0]
         if model_name == "best" and os.path.basename(os.path.dirname(model_path)) == "weights":
             model_name = os.path.basename(os.path.dirname(os.path.dirname(model_path)))
-        if cfg["yolo_mode"] == "custom":
-            metrics = evaluate_yolo_standard(
-                model_path=cfg["model_path"],
-                data_yaml=cfg["data_yaml"],
-                device=cfg["device"],
-                conf=cfg["conf"],
-                iou=cfg["iou"],
-                split=cfg["split"],
-                project=os.path.abspath(out_dir),
-                name=f"yolo_val_{model_name}",
-            )
-            metrics_path = os.path.join(out_dir, "yolo_val_metrics.csv")
-            pd.DataFrame([{"model_name": model_name, **metrics}]).to_csv(metrics_path, index=False)
-            print(f"Saved: {metrics_path}")
-            mapped, cm, labels = evaluate_yolo_custom(
-                model_path=cfg["model_path"],
-                data_yaml=cfg["data_yaml"],
-                device=cfg["device"],
-                conf=cfg["conf"],
-                iou=cfg["iou"],
-            )
-            metrics_path = os.path.join(out_dir, "yolo_class_metrics.csv")
+        if model_type == "yolo":
+            if model_mode == "custom":
+                metrics = evaluate_yolo_standard(
+                    model_path=cfg["model_path"],
+                    data_yaml=cfg["data_yaml"],
+                    device=cfg["device"],
+                    conf=cfg["conf"],
+                    iou=cfg["iou"],
+                    split=cfg["split"],
+                    project=os.path.abspath(out_dir),
+                    name=f"yolo_val_{model_name}",
+                )
+                metrics_path = os.path.join(out_dir, "yolo_val_metrics.csv")
+                pd.DataFrame([{"model_name": model_name, **metrics}]).to_csv(metrics_path, index=False)
+                print(f"Saved: {metrics_path}")
+                mapped, cm, labels = evaluate_yolo_custom(
+                    model_path=cfg["model_path"],
+                    data_yaml=cfg["data_yaml"],
+                    device=cfg["device"],
+                    conf=cfg["conf"],
+                    iou=cfg["iou"],
+                )
+                metrics_path = os.path.join(out_dir, "yolo_class_metrics.csv")
+                mapped.insert(0, "model_name", model_name)
+                mapped.to_csv(metrics_path, index=False)
+                print(f"Saved: {metrics_path}")
+                yolo_plots_dir = os.path.join(out_dir, f"yolo_plots_{model_name}")
+                _ensure_dir(yolo_plots_dir)
+                save_confusion_matrix_plot(
+                    cm,
+                    labels,
+                    os.path.join(yolo_plots_dir, "confusion_matrix.png"),
+                    f"Confusion matrix ({model_name})",
+                )
+                save_confusion_matrix_plot(
+                    cm,
+                    labels,
+                    os.path.join(yolo_plots_dir, "confusion_matrix_norm.png"),
+                    f"Confusion matrix (normalized, {model_name})",
+                    normalize=True,
+                )
+                print(f"YOLO model: {model_name}")
+            else:
+                mapped, cm, labels = evaluate_yolo_mapped(
+                    model_path=cfg["model_path"],
+                    data_yaml=cfg["data_yaml"],
+                    device=cfg["device"],
+                    conf=cfg["conf"],
+                    iou=cfg["iou"],
+                )
+                metrics_path = os.path.join(out_dir, "yolo_class_metrics.csv")
+                mapped.insert(0, "model_name", model_name)
+                mapped.to_csv(metrics_path, index=False)
+                print(f"Saved: {metrics_path}")
+                yolo_plots_dir = os.path.join(out_dir, f"yolo_plots_{model_name}")
+                _ensure_dir(yolo_plots_dir)
+                save_confusion_matrix_plot(
+                    cm,
+                    labels,
+                    os.path.join(yolo_plots_dir, "confusion_matrix.png"),
+                    f"Confusion matrix ({model_name})",
+                )
+                save_confusion_matrix_plot(
+                    cm,
+                    labels,
+                    os.path.join(yolo_plots_dir, "confusion_matrix_norm.png"),
+                    f"Confusion matrix (normalized, {model_name})",
+                    normalize=True,
+                )
+                print(f"YOLO model: {model_name}")
+        elif model_type == "rfdetr":
+            if model_mode == "custom":
+                mapped, cm, labels = evaluate_rfdetr_custom(
+                    model_path=cfg["model_path"],
+                    data_yaml=cfg["data_yaml"],
+                    device=cfg["device"],
+                    conf=cfg["conf"],
+                    iou=cfg["iou"],
+                    box_format=rfdetr_box_format,
+                    box_normalized=rfdetr_box_normalized,
+                )
+            else:
+                mapped, cm, labels = evaluate_rfdetr_mapped(
+                    model_path=cfg["model_path"],
+                    data_yaml=cfg["data_yaml"],
+                    device=cfg["device"],
+                    conf=cfg["conf"],
+                    iou=cfg["iou"],
+                    box_format=rfdetr_box_format,
+                    box_normalized=rfdetr_box_normalized,
+                )
+            metrics_path = os.path.join(out_dir, "rfdetr_class_metrics.csv")
             mapped.insert(0, "model_name", model_name)
             mapped.to_csv(metrics_path, index=False)
             print(f"Saved: {metrics_path}")
-            yolo_plots_dir = os.path.join(out_dir, f"yolo_plots_{model_name}")
-            _ensure_dir(yolo_plots_dir)
+            rfdetr_plots_dir = os.path.join(out_dir, f"rfdetr_plots_{model_name}")
+            _ensure_dir(rfdetr_plots_dir)
             save_confusion_matrix_plot(
                 cm,
                 labels,
-                os.path.join(yolo_plots_dir, "confusion_matrix.png"),
+                os.path.join(rfdetr_plots_dir, "confusion_matrix.png"),
                 f"Confusion matrix ({model_name})",
             )
             save_confusion_matrix_plot(
                 cm,
                 labels,
-                os.path.join(yolo_plots_dir, "confusion_matrix_norm.png"),
+                os.path.join(rfdetr_plots_dir, "confusion_matrix_norm.png"),
                 f"Confusion matrix (normalized, {model_name})",
                 normalize=True,
             )
-            print(f"YOLO model: {model_name}")
+            summary = mapped[mapped["class_id"] == "all"] if "class_id" in mapped.columns else pd.DataFrame()
+            if not summary.empty:
+                summary_path = os.path.join(out_dir, "rfdetr_metrics.csv")
+                summary.to_csv(summary_path, index=False)
+                print(f"Saved: {summary_path}")
+            print(f"RF-DETR model: {model_name}")
         else:
-            mapped, cm, labels = evaluate_yolo_mapped(
-                model_path=cfg["model_path"],
-                data_yaml=cfg["data_yaml"],
-                device=cfg["device"],
-                conf=cfg["conf"],
-                iou=cfg["iou"],
-            )
-            metrics_path = os.path.join(out_dir, "yolo_class_metrics.csv")
-            mapped.insert(0, "model_name", model_name)
-            mapped.to_csv(metrics_path, index=False)
-            print(f"Saved: {metrics_path}")
-            yolo_plots_dir = os.path.join(out_dir, f"yolo_plots_{model_name}")
-            _ensure_dir(yolo_plots_dir)
-            save_confusion_matrix_plot(
-                cm,
-                labels,
-                os.path.join(yolo_plots_dir, "confusion_matrix.png"),
-                f"Confusion matrix ({model_name})",
-            )
-            save_confusion_matrix_plot(
-                cm,
-                labels,
-                os.path.join(yolo_plots_dir, "confusion_matrix_norm.png"),
-                f"Confusion matrix (normalized, {model_name})",
-                normalize=True,
-            )
-            print(f"YOLO model: {model_name}")
+            raise ValueError(f"Unsupported model_type: {model_type}")
 
     return 0

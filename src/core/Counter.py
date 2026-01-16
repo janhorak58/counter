@@ -6,113 +6,140 @@ from src.core.ObjectTracker import ObjectTracker
 from src.core.LineCounter import LineCounter
 from src.core.DetectedObject import DetectedObject
 
+
 class Counter:
-    """Hlavní API pro počítání průchodů - podporuje více čar"""
-    
-    def __init__(self, model_path: str, lines: List[Dict], 
-                 min_distance: float = 20.0, device: str = 'cpu', confidence: float = 0.4, iou: float = 0.5, pretrained=False):
+    """HlavnA- API pro poŽ?A-tA­nA- pr_chod_ - podporuje vA-ce Ž?ar"""
+
+    def __init__(
+        self,
+        model_path: str,
+        lines: List[Dict],
+        min_distance: float = 20.0,
+        device: str = "cpu",
+        confidence: float = 0.4,
+        iou: float = 0.5,
+        pretrained: bool = False,
+        model_type: str = "yolo",
+        track_iou_threshold: float = 0.3,
+        track_max_lost: int = 15,
+        track_match_classes: bool = True,
+        rfdetr_box_format: str = "xyxy",
+        rfdetr_box_normalized: str = "auto",
+    ):
         """
         Args:
-            model_path: Cesta k YOLO modelu
-            lines: Seznam čar, každá jako dict:
+            model_path: Cesta k detekcniho modelu
+            lines: Seznam Ž?ar, ka_dA­ jako dict:
                    {'start': (x1, y1), 'end': (x2, y2), 'name': 'Line 1'}
-            min_distance: Minimální vzdálenost od čáry
+            min_distance: MinimA­lnA- vzdA­lenost od Ž?A­ry
             device: 'cpu' nebo 'cuda'
         """
-        self.tracker = ObjectTracker(model_path, confidence, iou, device, pretrained=pretrained)
+        self.tracker = ObjectTracker(
+            model_path,
+            confidence,
+            iou,
+            device,
+            pretrained=pretrained,
+            model_type=model_type,
+            track_iou_threshold=track_iou_threshold,
+            track_max_lost=track_max_lost,
+            track_match_classes=track_match_classes,
+            rfdetr_box_format=rfdetr_box_format,
+            rfdetr_box_normalized=rfdetr_box_normalized,
+        )
         self.device = device
         self.min_distance = min_distance
         self.frame_num = 0
         self.pretrained = pretrained
-        
-        # Vytvoření LineCounterů pro každou čáru
+
+        # VytvoTenA- LineCounter_ pro ka_dou Ž?A­ru
         self.line_counters: Dict[str, LineCounter] = {}
         for line in lines:
-            name = line.get('name', f"Line_{len(self.line_counters)}")
+            name = line.get("name", f"Line_{len(self.line_counters)}")
             self.line_counters[name] = LineCounter(
-                line_start=line['start'],
-                line_end=line['end'],
+                line_start=line["start"],
+                line_end=line["end"],
                 min_distance=min_distance,
                 name=name,
-                device=device
+                device=device,
             )
-    
+
     def add_line(self, start: Tuple[int, int], end: Tuple[int, int], name: str = None):
-        """Přidá novou čáru za běhu"""
+        """PTidA­ novou Ž?A­ru za bŽ>hu"""
         if name is None:
             name = f"Line_{len(self.line_counters)}"
-        
+
         self.line_counters[name] = LineCounter(
             line_start=start,
             line_end=end,
             min_distance=self.min_distance,
             name=name,
-            device=self.device
+            device=self.device,
         )
-    
+
     def process_frame(self, frame: np.ndarray) -> Dict[str, List[Tuple[DetectedObject, Optional[str]]]]:
         """
         Zpracuje jeden frame.
-        Vrací: dict s výsledky pro každou čáru
+        VracA-: dict s vA«sledky pro ka_dou Ž?A­ru
                {'Line_1': [(obj, 'in'), (obj, None)], 'Line_2': [...]}
         """
         self.frame_num += 1
-        
+
         # Aktualizace trackeru
         active_objects = self.tracker.update(frame)
-        
+
         results = {}
         for line_name, line_counter in self.line_counters.items():
             line_results = []
             for obj in active_objects.values():
                 crossing = line_counter.check_crossing(obj)
                 line_results.append((obj, crossing))
-                
+
                 if crossing:
                     print(f"Frame {self.frame_num}: {obj.class_name} (ID: {obj.id}) -> {crossing.upper()} @ {line_name}")
-            
+
             results[line_name] = line_results
-        
+
         return results
-    
+
     def draw(self, frame: np.ndarray, show_trajectory: bool = True):
-        """Vykreslí vše do framu"""
-        # Všechny čáry
+        """VykreslA- v­e do framu"""
+        # V­echny Ž?A­ry
         for line_counter in self.line_counters.values():
             line_counter.draw(frame)
-        
-        # Panel s počty pro všechny čáry
+
+        # Panel s poŽ?ty pro v­echny Ž?A­ry
         y_offset = 30
         for line_name, line_counter in self.line_counters.items():
             line_counter.draw_counts(frame, x=10, y=y_offset)
-            y_offset += 150  # Posun pro další čáru
-        
+            y_offset += 150  # Posun pro dal­A- Ž?A­ru
+
         # Objekty (jen jednou)
         for obj in self.tracker.objects.values():
             if len(obj.positions) > 0:
                 obj.draw(frame, show_trajectory)
-    
+
     def get_counts(self) -> Dict[str, dict]:
-        """Vrátí počty pro všechny čáry"""
+        """VrA­tA- poŽ?ty pro v­echny Ž?A­ry"""
         return {
             name: {
-                'in': dict(lc.counts_in),
-                'out': dict(lc.counts_out),
-                'total_in': lc.get_total_in(),
-                'total_out': lc.get_total_out()
+                "in": dict(lc.counts_in),
+                "out": dict(lc.counts_out),
+                "total_in": lc.get_total_in(),
+                "total_out": lc.get_total_out(),
             }
             for name, lc in self.line_counters.items()
         }
-    
+
     @staticmethod
     def select_lines_interactive(frame: np.ndarray, num_lines: int = 1) -> List[Dict]:
-        """Interaktivní výběr více čar"""
+        """InteraktivnA- vA«bŽ>r vA-ce Ž?ar"""
         lines = []
-        
+
         for i in range(num_lines):
             line_coords = []
             drawing = False
-            
+
             def mouse_callback(event, x, y, flags, param):
                 nonlocal drawing, line_coords
                 if event == cv2.EVENT_LBUTTONDOWN:
@@ -129,41 +156,50 @@ class Counter:
                         line_coords.append((x, y))
                     else:
                         line_coords[1] = (x, y)
-            
+
             window_name = f"Draw line {i+1}/{num_lines} - press 'q' when done"
             cv2.namedWindow(window_name)
             cv2.setMouseCallback(window_name, mouse_callback)
-            
-            print(f"Nakreslete čáru {i+1}/{num_lines} a stiskněte 'q'")
-            
+
+            print(f"Nakreslete Ž?A­ru {i+1}/{num_lines} a stisknŽ>te 'q'")
+
             while True:
                 temp_frame = frame.copy()
-                
-                # Vykresli předchozí čáry
+
+                # Vykresli pTedchozA- Ž?A­ry
                 colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
                 for j, prev_line in enumerate(lines):
                     color = colors[j % len(colors)]
-                    cv2.line(temp_frame, prev_line['start'], prev_line['end'], color, 2)
-                    cv2.putText(temp_frame, prev_line['name'], prev_line['start'],
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-                
-                # Vykresli aktuální čáru
+                    cv2.line(temp_frame, prev_line["start"], prev_line["end"], color, 2)
+                    cv2.putText(
+                        temp_frame,
+                        prev_line["name"],
+                        prev_line["start"],
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        color,
+                        2,
+                    )
+
+                # Vykresli aktuA­lnA- Ž?A­ru
                 if len(line_coords) >= 2:
                     color = colors[i % len(colors)]
                     cv2.line(temp_frame, line_coords[0], line_coords[1], color, 2)
                 elif len(line_coords) == 1:
                     cv2.circle(temp_frame, line_coords[0], 5, (0, 255, 0), -1)
-                
+
                 cv2.imshow(window_name, temp_frame)
-                if cv2.waitKey(1) & 0xFF == ord('q') and len(line_coords) == 2:
+                if cv2.waitKey(1) & 0xFF == ord("q") and len(line_coords) == 2:
                     break
-            
+
             cv2.destroyWindow(window_name)
-            
-            lines.append({
-                'start': tuple(line_coords[0]),
-                'end': tuple(line_coords[1]),
-                'name': f"Line_{i+1}"
-            })
-        
+
+            lines.append(
+                {
+                    "start": tuple(line_coords[0]),
+                    "end": tuple(line_coords[1]),
+                    "name": f"Line_{i+1}",
+                }
+            )
+
         return lines

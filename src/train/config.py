@@ -4,6 +4,7 @@ import yaml
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
+    "model_type": "yolo",
     "model": "yolov8s.pt",
     "data_yaml": "data/data.yaml",
     "epochs": 100,
