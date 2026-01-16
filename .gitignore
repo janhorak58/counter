@@ -5,7 +5,7 @@ runs/
 outputs/
 __pycache__/
 *.zip
-models/
+/models/
 mess
 .env
 conf.yaml
