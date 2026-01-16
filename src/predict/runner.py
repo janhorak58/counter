@@ -96,6 +96,7 @@ def run_prediction(cfg: Dict) -> Optional[Dict[str, Dict]]:
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     os.makedirs(output_folder, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -113,6 +114,10 @@ def run_prediction(cfg: Dict) -> Optional[Dict[str, Dict]]:
         counter.draw(frame)
 
         out.write(frame)
+        if total_frames > 0:
+            print(f"{frame_idx}/{total_frames}", end="\r", flush=True)
+        else:
+            print(f"{frame_idx}/?", end="\r", flush=True)
         if show_window:
             try:
                 cv2.imshow("Counting", frame)
