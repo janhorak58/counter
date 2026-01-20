@@ -26,7 +26,7 @@ class LineCounter:
 
     def __init__(self, line_start: Tuple[int, int], line_end: Tuple[int, int],
                  min_distance: float = 20.0, name: str = "Line", device='cpu'):
-
+        self.name = name
         device = norm_device(device)
         self.A = torch.tensor(line_start, dtype=torch.float32).to(device)
         self.B = torch.tensor(line_end, dtype=torch.float32).to(device)
