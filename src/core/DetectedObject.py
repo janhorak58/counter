@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import torch
 from typing import Tuple, List, Optional
-
+from src.utils.device_utils import norm_device
 
 class DetectedObject:
     """Reprezentuje detekovaný a sledovaný objekt"""
@@ -16,7 +16,7 @@ class DetectedObject:
         self.class_name = self.class_names.get(class_id, 'unknown')
         self.color = self.colors.get(class_id, (255, 255, 255))
         self.confidence = confidence
-        self.device = device
+        self.device = norm_device(device)
         
         self.bbox = torch.tensor(bbox, dtype=torch.float32).to(device)
         self.centroid = self._compute_centroid()

@@ -6,9 +6,10 @@ from ultralytics import YOLO
 from src.core.DetectedObject import DetectedObject
 from src.models.rfdetr import load_rfdetr_model, predict_rfdetr
 
+from src.utils.device_utils import norm_device
 
 class ObjectTracker:
-    """Spravuje v­echny sledovanAc objekty"""
+    """Spravuje všechny sledované objekty"""
 
     def __init__(
         self,
@@ -25,7 +26,7 @@ class ObjectTracker:
         rfdetr_box_normalized: str = "auto",
     ):
         self.model_type = (model_type or "yolo").lower()
-        self.device = device
+        self.device = norm_device(device)
         self.confidence = confidence
         self.iou = iou
         self.pretrained = pretrained

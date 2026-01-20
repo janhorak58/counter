@@ -6,6 +6,9 @@ import cv2
 import numpy as np
 
 from src.core.DetectedObject import DetectedObject
+from src.utils.device_utils import norm_device
+
+
 
 class ObjectState:
     """Stav sledovaného objektu vůči jedné čáře"""
@@ -17,14 +20,14 @@ class ObjectState:
 
 class LineCounter:
     """Počítá průchody objektů přes definovanou čáru"""
-    
+
     # Barvy pro různé čáry
     line_colors = [(0, 255, 255), (255, 0, 255), (255, 255, 0), (0, 255, 0), (255, 128, 0)]
-    
+
     def __init__(self, line_start: Tuple[int, int], line_end: Tuple[int, int],
                  min_distance: float = 20.0, name: str = "Line", device='cpu'):
-        self.device = device
-        self.name = name
+
+        device = norm_device(device)
         self.A = torch.tensor(line_start, dtype=torch.float32).to(device)
         self.B = torch.tensor(line_end, dtype=torch.float32).to(device)
         self.line_vec = self.B - self.A

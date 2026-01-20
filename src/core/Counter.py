@@ -5,7 +5,7 @@ from typing import Tuple, Dict, List, Optional
 from src.core.ObjectTracker import ObjectTracker
 from src.core.LineCounter import LineCounter
 from src.core.DetectedObject import DetectedObject
-
+from src.utils.device_utils import norm_device
 
 class Counter:
     """HlavnA- API pro poŽ?A-tA­nA- pr_chod_ - podporuje vA-ce Ž?ar"""
@@ -47,12 +47,11 @@ class Counter:
             rfdetr_box_format=rfdetr_box_format,
             rfdetr_box_normalized=rfdetr_box_normalized,
         )
-        self.device = device
+        self.device = norm_device(device)
         self.min_distance = min_distance
         self.frame_num = 0
         self.pretrained = pretrained
 
-        # VytvoTenA- LineCounter_ pro ka_dou Ž?A­ru
         self.line_counters: Dict[str, LineCounter] = {}
         for line in lines:
             name = line.get("name", f"Line_{len(self.line_counters)}")
@@ -61,11 +60,11 @@ class Counter:
                 line_end=line["end"],
                 min_distance=min_distance,
                 name=name,
-                device=device,
+                device=self.device,
             )
 
     def add_line(self, start: Tuple[int, int], end: Tuple[int, int], name: str = None):
-        """PTidA­ novou Ž?A­ru za bŽ>hu"""
+        """Přidá novou čáru za běhu"""
         if name is None:
             name = f"Line_{len(self.line_counters)}"
 
@@ -80,7 +79,7 @@ class Counter:
     def process_frame(self, frame: np.ndarray) -> Dict[str, List[Tuple[DetectedObject, Optional[str]]]]:
         """
         Zpracuje jeden frame.
-        VracA-: dict s vA«sledky pro ka_dou Ž?A­ru
+        Vrací: dict s výsledky pro každou čáru
                {'Line_1': [(obj, 'in'), (obj, None)], 'Line_2': [...]}
         """
         self.frame_num += 1
@@ -103,24 +102,23 @@ class Counter:
         return results
 
     def draw(self, frame: np.ndarray, show_trajectory: bool = True):
-        """VykreslA- v­e do framu"""
-        # V­echny Ž?A­ry
+        """Vykreslí vše do framu"""
+        # Všechny čáry
         for line_counter in self.line_counters.values():
             line_counter.draw(frame)
 
-        # Panel s poŽ?ty pro v­echny Ž?A­ry
+        # Panel s počty pro všechny čáry
         y_offset = 30
         for line_name, line_counter in self.line_counters.items():
             line_counter.draw_counts(frame, x=10, y=y_offset)
-            y_offset += 150  # Posun pro dal­A- Ž?A­ru
-
+            y_offset += 150  # Posun pro další čáru
         # Objekty (jen jednou)
         for obj in self.tracker.objects.values():
             if len(obj.positions) > 0:
                 obj.draw(frame, show_trajectory)
 
     def get_counts(self) -> Dict[str, dict]:
-        """VrA­tA- poŽ?ty pro v­echny Ž?A­ry"""
+        """Vrací počty pro všechny čáry"""
         return {
             name: {
                 "in": dict(lc.counts_in),
@@ -133,7 +131,7 @@ class Counter:
 
     @staticmethod
     def select_lines_interactive(frame: np.ndarray, num_lines: int = 1) -> List[Dict]:
-        """InteraktivnA- vA«bŽ>r vA-ce Ž?ar"""
+        """Interaktivní výběr více čar"""
         lines = []
 
         for i in range(num_lines):
@@ -161,12 +159,12 @@ class Counter:
             cv2.namedWindow(window_name)
             cv2.setMouseCallback(window_name, mouse_callback)
 
-            print(f"Nakreslete Ž?A­ru {i+1}/{num_lines} a stisknŽ>te 'q'")
+            print(f"Nakreslete Čáru {i+1}/{num_lines} a stiskněte 'q'")
 
             while True:
                 temp_frame = frame.copy()
 
-                # Vykresli pTedchozA- Ž?A­ry
+                # Vykresli předchozí čáry
                 colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
                 for j, prev_line in enumerate(lines):
                     color = colors[j % len(colors)]
@@ -181,7 +179,7 @@ class Counter:
                         2,
                     )
 
-                # Vykresli aktuA­lnA- Ž?A­ru
+                # Vykresli aktuální čáru
                 if len(line_coords) >= 2:
                     color = colors[i % len(colors)]
                     cv2.line(temp_frame, line_coords[0], line_coords[1], color, 2)
