@@ -7,7 +7,14 @@ import numpy as np
 
 def _import_rfdetr_module() -> Any:
     errors = []
-    for name in ("rf_detr", "rfdetr"):
+    preferred = os.environ.get("RFDETR_MODULE")
+    if preferred:
+        try:
+            return importlib.import_module(preferred)
+        except Exception as exc:
+            errors.append(f"{preferred}: {exc}")
+
+    for name in ("rfdetr", "rf_detr"):
         try:
             return importlib.import_module(name)
         except Exception as exc:
