@@ -19,11 +19,52 @@ def _import_rfdetr_module() -> Any:
     )
 
 
+def _resolve_rfdetr_class(module: Any, model_path: str) -> Any:
+    model_cls = getattr(module, "RFDETR", None)
+    if model_cls is not None:
+        return model_cls
+
+    named_classes = [
+        "RFDETRSmall",
+        "RFDETRMedium",
+        "RFDETRLarge",
+        "RFDETRNano",
+        "RFDETRBase",
+        "RFDETRSegPreview",
+    ]
+    available = {name: getattr(module, name) for name in named_classes if hasattr(module, name)}
+
+    if model_path:
+        direct = getattr(module, model_path, None)
+        if direct is not None:
+            return direct
+
+        hint = model_path.lower()
+        for key, class_name in (
+            ("nano", "RFDETRNano"),
+            ("small", "RFDETRSmall"),
+            ("medium", "RFDETRMedium"),
+            ("large", "RFDETRLarge"),
+            ("base", "RFDETRBase"),
+            ("seg", "RFDETRSegPreview"),
+        ):
+            if key in hint and class_name in available:
+                return available[class_name]
+
+    for class_name in named_classes:
+        if class_name in available:
+            return available[class_name]
+    return None
+
+
 def load_rfdetr_model(model_path: str, device: str = "cpu") -> Any:
     module = _import_rfdetr_module()
-    model_cls = getattr(module, "RFDETR", None)
+    model_cls = _resolve_rfdetr_class(module, model_path)
     if model_cls is None:
-        raise ImportError("RFDETR class not found in the rf-detr package.")
+        raise ImportError(
+            "RFDETR class not found in the rf-detr package. "
+            "Available exports should include RFDETRSmall/Medium/Large/Nano."
+        )
 
     model = None
     if model_path:
