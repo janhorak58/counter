@@ -124,9 +124,7 @@ def run_prediction_base(cfg: Dict, model_type: Optional[str] = None) -> Optional
             except cv2.error as exc:
                 print(f"OpenCV window disabled ({exc}). Continuing without display.")
                 show_window = False
-        elif progress_every > 0 and frame_idx % progress_every == 0:
-            print(f"Processed {frame_idx} frames...")
-
+       
         if show_window:
             try:
                 if cv2.waitKey(1) & 0xFF == ord("q"):
