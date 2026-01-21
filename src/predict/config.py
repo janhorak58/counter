@@ -33,6 +33,37 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
 }
 
+RFDETR_EXAMPLE_CONFIG: Dict[str, Any] = {
+    "paths": {
+        "video_folder": "data/videos/",
+        "output_folder": "data/output/",
+        "results_folder": "data/results/predicted",
+        "model_path": "models/rfdetr_medium_v11/checkpoint_best_ema.pth",
+        "video_filename": "vid16.mp4",
+    },
+    "parameters": {
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.35,
+        "grey_zone_size": 20.0,
+        "device": "cpu",
+        "mode": "custom",
+        "model_type": "rfdetr",
+        "track_iou_threshold": 0.3,
+        "track_max_lost": 15,
+        "track_match_classes": True,
+        "rfdetr_box_format": "xyxy",
+        "rfdetr_box_normalized": "auto",
+        "use_interactive_lines": False,
+        "num_lines": 1,
+        "lines": [
+            {"start": [846, 404], "end": [1328, 456], "name": "Line_1"},
+        ],
+        "show_window": True,
+        "progress_every_n_frames": 100,
+    },
+}
+
+
 
 def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in updates.items():
