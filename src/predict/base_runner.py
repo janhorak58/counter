@@ -134,7 +134,11 @@ def run_prediction_base(cfg: Dict, model_type: Optional[str] = None) -> Optional
 
     cap.release()
     out.release()
-    cv2.destroyAllWindows()
+    if show_window:
+        try:
+            cv2.destroyAllWindows()
+        except cv2.error as exc:
+            print(f"OpenCV window cleanup skipped ({exc}).")
 
     results = counter.get_counts()
     print("\n" + "=" * 50)
