@@ -11,3 +11,15 @@ mess
 conf.yaml
 config.yaml
 *.csv
+*.mp4
+
+.conda_envs/
+.pyuser/
+.ultralytics/
+.venvs/
+config.yaml.backup
+pbs_scripts_legacy/
+predictions/
+*.pth
+*.pbs
+
