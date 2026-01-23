@@ -18,6 +18,7 @@ pip install rf-detr
 ## Modules
 - `predict`: run counting on a video, save annotated video + CSV with counts.
 - `eval`: compare predictions vs ground truth, compute metrics, optional detector validation, plots.
+- `eval_model`: evaluate detection models on dataset_yolo (YOLO) or dataset_coco (RF-DETR).
 - `train`: train a detector model from config.
 
 ## Config
@@ -91,6 +92,11 @@ python -m src.predict
 Evaluation:
 ```bash
 python -m src.eval
+```
+
+Model evaluation:
+```bash
+python -m src.eval_model --model-type yolo --model-path models/yolo/v2/yolov8n_v12/weights/best.pt
 ```
 
 Training:

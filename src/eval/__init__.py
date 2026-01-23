@@ -1,3 +1,1 @@
-from src.eval.cli import main
-
-__all__ = ["main"]
+"""Evaluation module for people counting benchmark."""

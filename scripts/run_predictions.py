@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Batch prediction script pro YOLO modely.
+Batch prediction script pro YOLO a RF-DETR modely.
 
 Pouziti:
     python scripts/run_predictions.py --all
     python scripts/run_predictions.py --finetuned
     python scripts/run_predictions.py --pretrained
     python scripts/run_predictions.py --dry-run
-    python scripts/run_predictions.py --models yolo11l_v11 yolov8n_v12
+    python scripts/run_predictions.py --models yolo11l_v11 rfdetr_base_v1
     python scripts/run_predictions.py --videos vid16.mp4 vid17.mp4
+    python scripts/run_predictions.py --yolo-only
+    python scripts/run_predictions.py --rfdetr-only
 """
 
 import argparse
@@ -30,19 +32,53 @@ CONFIG_BACKUP = PROJECT_DIR / "config.yaml.backup"
 # Videa pro predikci
 VIDEOS = ["vid16.mp4", "vid17.mp4", "vid18.mp4"]
 
+# =============================================================================
 # Finetuned modely
-FINETUNED_MODELS = {
-    "yolo11l_v11": "models/yolo/v1/yolo11l_v11/weights/best.pt",
-    "yolov8n_v12": "models/yolo/v1/yolov8n_v12/weights/best.pt",
-    "yolov8s_v13": "models/yolo/v1/yolov8s_v13/weights/best.pt",
+# =============================================================================
+
+YOLO_MODELS = {
+    "yolo26l_v11": "models/yolo/v2/yolo26l_v11/weights/best.pt",
+    "yolo26x_v11": "models/yolo/v2/yolo26x_v11/weights/best.pt",
+    "yolo26s_v11": "models/yolo/v2/yolo26s_v11/weights/best.pt",
+    "yolov8n_v12": "models/yolo/v2/yolov8n_v12/weights/best.pt",
 }
 
-# Pretrained modely
-PRETRAINED_MODELS = {
-    "yolo11l_pretrained": "yolo11l.pt",
-    "yolov8l_pretrained": "yolov8l.pt",
-    "yolov8m_pretrained": "yolov8m.pt",
+RFDETR_MODELS = {
+    "rfdetr_large_v3": "models/rfdetr/v1/rfdetr_large_v3/checkpoint_best_ema.pth",
+    "rfdetr_medium_v2": "models/rfdetr/v1/rfdetr_medium_v2/checkpoint_best_ema.pth",
+    "rfdetr_small_v6": "models/rfdetr/v1/rfdetr_small_v6/checkpoint_best_ema.pth",
 }
+
+# =============================================================================
+# Pretrained modely
+# =============================================================================
+
+PRETRAINED_YOLO_MODELS = {
+    "yolo26l_pretrained": "yolo26l.pt",
+    "yolo26x_pretrained": "yolo26x.pt",
+}
+
+PRETRAINED_RFDETR_MODELS = {
+    "rfdetr_large_pretrained": "rf-detr-large.pth",
+    "rfdetr_medium_pretrained": "rf-detr-medium.pth",
+    "rfdetr_small_pretrained": "rf-detr-small.pth",
+}
+
+# =============================================================================
+# Combined dictionaries
+# =============================================================================
+
+FINETUNED_MODELS = {
+    **{k: (v, "yolo") for k, v in YOLO_MODELS.items()},
+    **{k: (v, "rfdetr") for k, v in RFDETR_MODELS.items()},
+}
+
+PRETRAINED_MODELS = {
+    **{k: (v, "yolo") for k, v in PRETRAINED_YOLO_MODELS.items()},
+    **{k: (v, "rfdetr") for k, v in PRETRAINED_RFDETR_MODELS.items()},
+}
+
+ALL_MODELS = {**FINETUNED_MODELS, **PRETRAINED_MODELS}
 
 
 # =============================================================================
@@ -111,12 +147,14 @@ def update_config(
     model_path: str,
     video_file: str,
     mode: str,
+    model_type: str,
     output_suffix: str,
 ) -> dict:
     """Update config for current run."""
     config["predict"]["paths"]["model_path"] = model_path
     config["predict"]["paths"]["video_filename"] = video_file
     config["predict"]["parameters"]["mode"] = mode
+    config["predict"]["parameters"]["model_type"] = model_type
     config["predict"]["paths"]["output_folder"] = f"./predictions/mp4/{output_suffix}"
     config["predict"]["paths"]["results_folder"] = f"./predictions/csv/{output_suffix}"
     return config
@@ -125,16 +163,18 @@ def update_config(
 def run_prediction(
     model_name: str,
     model_path: str,
+    model_type: str,
     video: str,
     mode: str,
     dry_run: bool = False,
 ) -> bool:
     """Run single prediction."""
-    print_info(f"Model: {model_name} | Video: {video} | Mode: {mode}")
+    print_info(f"Model: {model_name} | Type: {model_type} | Video: {video} | Mode: {mode}")
 
     if dry_run:
         print(f"  [DRY-RUN] python -m src.predict")
         print(f"    model_path: {model_path}")
+        print(f"    model_type: {model_type}")
         print(f"    video: {video}")
         print(f"    mode: {mode}")
         return True
@@ -145,7 +185,7 @@ def run_prediction(
 
     # Load and update config
     config = load_config()
-    config = update_config(config, model_path, video, mode, model_name)
+    config = update_config(config, model_path, video, mode, model_type, model_name)
     save_config(config)
 
     # Run prediction
@@ -162,9 +202,16 @@ def run_prediction(
         return False
 
 
+def filter_models_by_type(models: dict, model_type: str | None) -> dict:
+    """Filter models by type (yolo/rfdetr)."""
+    if model_type is None:
+        return models
+    return {k: v for k, v in models.items() if v[1] == model_type}
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Batch prediction script for YOLO models"
+        description="Batch prediction script for YOLO and RF-DETR models"
     )
     parser.add_argument(
         "--finetuned", action="store_true", help="Run only finetuned models"
@@ -174,6 +221,12 @@ def main():
     )
     parser.add_argument(
         "--all", action="store_true", help="Run all models (default)"
+    )
+    parser.add_argument(
+        "--yolo-only", action="store_true", help="Run only YOLO models"
+    )
+    parser.add_argument(
+        "--rfdetr-only", action="store_true", help="Run only RF-DETR models"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Only show what would be executed"
@@ -187,6 +240,13 @@ def main():
 
     args = parser.parse_args()
 
+    # Determine model type filter
+    model_type_filter = None
+    if args.yolo_only and not args.rfdetr_only:
+        model_type_filter = "yolo"
+    elif args.rfdetr_only and not args.yolo_only:
+        model_type_filter = "rfdetr"
+
     # Default: run all
     run_finetuned = args.finetuned or args.all or (not args.finetuned and not args.pretrained)
     run_pretrained = args.pretrained or args.all or (not args.finetuned and not args.pretrained)
@@ -199,20 +259,28 @@ def main():
     pretrained_to_run = {}
 
     if args.models:
+        # Specific models requested
         for model in args.models:
             if model in FINETUNED_MODELS:
-                finetuned_to_run[model] = FINETUNED_MODELS[model]
+                model_data = FINETUNED_MODELS[model]
+                # Apply type filter if specified
+                if model_type_filter is None or model_data[1] == model_type_filter:
+                    finetuned_to_run[model] = model_data
             elif model in PRETRAINED_MODELS:
-                pretrained_to_run[model] = PRETRAINED_MODELS[model]
+                model_data = PRETRAINED_MODELS[model]
+                # Apply type filter if specified
+                if model_type_filter is None or model_data[1] == model_type_filter:
+                    pretrained_to_run[model] = model_data
             else:
                 print_warning(f"Unknown model: {model}")
     else:
+        # Use all models based on flags
         if run_finetuned:
-            finetuned_to_run = FINETUNED_MODELS
+            finetuned_to_run = filter_models_by_type(FINETUNED_MODELS, model_type_filter)
         if run_pretrained:
-            pretrained_to_run = PRETRAINED_MODELS
+            pretrained_to_run = filter_models_by_type(PRETRAINED_MODELS, model_type_filter)
 
-    print_header("YOLO Batch Prediction Script")
+    print_header("YOLO & RF-DETR Batch Prediction Script")
 
     # Check config exists
     if not CONFIG_FILE.exists():
@@ -227,12 +295,15 @@ def main():
         completed = 0
 
         print_info(f"Total predictions: {total_runs}")
+        print_info(f"Finetuned models: {len(finetuned_to_run)}")
+        print_info(f"Pretrained models: {len(pretrained_to_run)}")
+        print_info(f"Videos: {len(videos)}")
 
         # Finetuned models
         if finetuned_to_run:
             print_header("Finetuned models (mode: custom)")
 
-            for model_name, model_path in finetuned_to_run.items():
+            for model_name, (model_path, model_type) in finetuned_to_run.items():
                 full_path = PROJECT_DIR / model_path
                 if not full_path.exists() and not args.dry_run:
                     print_warning(f"Model not found: {model_path}, skipping...")
@@ -241,13 +312,15 @@ def main():
                 for video in videos:
                     completed += 1
                     print_info(f"[{completed}/{total_runs}] Processing...")
-                    run_prediction(model_name, model_path, video, "custom", args.dry_run)
+                    run_prediction(
+                        model_name, model_path, model_type, video, "custom", args.dry_run
+                    )
 
         # Pretrained models
         if pretrained_to_run:
             print_header("Pretrained models (mode: pretrained)")
 
-            for model_name, model_path in pretrained_to_run.items():
+            for model_name, (model_path, model_type) in pretrained_to_run.items():
                 full_path = PROJECT_DIR / model_path
                 if not full_path.exists() and not args.dry_run:
                     print_warning(f"Model not found: {model_path}, skipping...")
@@ -256,7 +329,9 @@ def main():
                 for video in videos:
                     completed += 1
                     print_info(f"[{completed}/{total_runs}] Processing...")
-                    run_prediction(model_name, model_path, video, "pretrained", args.dry_run)
+                    run_prediction(
+                        model_name, model_path, model_type, video, "pretrained", args.dry_run
+                    )
 
     finally:
         # Always restore config

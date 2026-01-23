@@ -23,3 +23,5 @@ predictions/
 *.pth
 *.pbs
 
+eval/*
+!eval/README.md
