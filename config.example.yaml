@@ -15,8 +15,8 @@
 # - predict.parameters.rfdetr_box_normalized: auto | true | false
 #+#+#+#+############################################################
 eval:
-    gt_folder: data/results/gt
-    pred_folder: data/results/predicted
+    gt_folder: predictions/csv_gt
+    pred_folder: predictions/csv
     out_dir: data/results/analysis
     plots: true
     map_pretrained_counts: false

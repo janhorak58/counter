@@ -15,8 +15,8 @@ def _parse_class_ids(value: str) -> list[int]:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate people counting results.")
-    parser.add_argument("--gt-dir", default="data/results/gt")
-    parser.add_argument("--pred-dir", default="data/results/predicted")
+    parser.add_argument("--gt-dir", default="predictions/csv_gt")
+    parser.add_argument("--pred-dir", default="predictions/csv")
     parser.add_argument("--output-root", default="eval")
     parser.add_argument("--class-ids", default="0,1,2,3")
     args = parser.parse_args(list(argv) if argv is not None else None)

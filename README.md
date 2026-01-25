@@ -48,8 +48,8 @@ Edit `config.yaml` (see `config.example.yaml`).
 - `parameters.progress_every_n_frames`: print progress every N frames when display is off.
 
 ### eval
-- `gt_folder`: ground truth CSV folder.
-- `pred_folder`: predicted CSV folder.
+- `gt_folder`: ground truth CSV folder (default: `predictions/csv_gt`).
+- `pred_folder`: predicted CSV folder (default: `predictions/csv`).
 - `out_dir`: base output folder (timestamped run folders).
 - `plots`: enable plot generation.
 - `map_pretrained_counts`: map COCO count classes to custom classes.

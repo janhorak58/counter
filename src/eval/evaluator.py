@@ -63,7 +63,7 @@ def load_counts_csv(path: Path) -> pd.DataFrame:
 def discover_prediction_files(pred_dir: Path) -> List[PredictionFile]:
     pattern = re.compile(r"^vid(?P<video>\d+)_+(?P<model>.+)_results\.csv$", re.IGNORECASE)
     predictions: List[PredictionFile] = []
-    for path in pred_dir.glob("*.csv"):
+    for path in pred_dir.rglob("*.csv"):
         match = pattern.match(path.name)
         if not match:
             continue
@@ -71,6 +71,32 @@ def discover_prediction_files(pred_dir: Path) -> List[PredictionFile]:
         model = match.group("model")
         predictions.append(PredictionFile(path=path, model=model, video_id=video_id))
     return predictions
+
+
+def _prediction_variant(path: Path) -> str:
+    parts = {part.lower() for part in path.parts}
+    if "yolo_tuned" in parts:
+        return "yolo_tuned"
+    if "yolo_pretrained" in parts:
+        return "yolo_pretrained"
+    if "rfdetr_pretrained" in parts:
+        return "rfdetr_pretrained"
+    if "rfdetr_tuned" in parts:
+        return "rfdetr_tuned"
+    return "unknown"
+
+
+def _remap_pred_classes(pred_df: pd.DataFrame, class_map: Dict[int, int]) -> pd.DataFrame:
+    if pred_df.empty:
+        return pred_df
+    mapped = pred_df[pred_df["class_id"].isin(class_map)].copy()
+    if mapped.empty:
+        return mapped
+    mapped["class_id"] = mapped["class_id"].map(class_map).astype(int)
+    return (
+        mapped.groupby(["line_name", "class_id"], as_index=False)[["in_count", "out_count"]]
+        .sum()
+    )
 
 
 def _prepare_eval_rows(
@@ -370,17 +396,24 @@ def run_evaluation(
     output_root: Path,
     class_ids: Iterable[int],
 ) -> Path:
+    yolo_pretrained_class_map = {4: 0, 5: 1, 6: 2, 7: 3}
     predictions = discover_prediction_files(pred_dir)
     if not predictions:
         raise FileNotFoundError(f"No prediction files found in {pred_dir}")
 
     rows: List[pd.DataFrame] = []
     for pred in predictions:
+        variant = _prediction_variant(pred.path)
+        if variant in {"rfdetr_pretrained", "rfdetr_tuned"}:
+            # TODO: Add RF-DETR class-id mapping support once defined.
+            continue
         gt_path = gt_dir / f"data_{pred.video_id}.csv"
         if not gt_path.exists():
             continue
         gt_df = load_counts_csv(gt_path)
         pred_df = load_counts_csv(pred.path)
+        if variant == "yolo_pretrained":
+            pred_df = _remap_pred_classes(pred_df, yolo_pretrained_class_map)
         rows.append(_prepare_eval_rows(gt_df, pred_df, pred.model, pred.video_id))
 
     if not rows:
