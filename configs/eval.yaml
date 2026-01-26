@@ -1,0 +1,17 @@
+gt_dir: data/counts_gt
+runs_dir: runs/predict
+out_dir: runs/eval
+
+only_completed: true
+rank_by: event_wape_total   # nebo video_mae_total
+
+videos_dir: ""              # nech prázdné, pokud nechceš rate metriky
+
+filters:
+  run_ids: []
+  backends: []
+  variants: []
+  model_ids: []
+
+charts:
+  enabled: true

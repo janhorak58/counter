@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "counter"
+version = "0.1.0"
+description = "People counting (net-state) with YOLO/RF-DETR backends, tracking and evaluation."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "PyYAML>=6.0",
+  "pydantic>=2.6",
+  "ultralytics>=8.4.7",
+  "lap>=0.5.12",
+  "opencv-python>=4.8",
+  "opencv-python-headless>=4.8",
+  "streamlit-image-coordinates>=0.4.0",
+]
+
+[project.optional-dependencies]
+ui = [
+  "streamlit>=1.30",
+  "streamlit-drawable-canvas>=0.9.3",
+  "streamlit-autorefresh>=1.0.1",
+]
+eval = [
+  "pandas>=2.0",
+  "matplotlib>=3.7",
+]
+predict = [
+  "torch",
+  "rfdetr",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+counter = "counter.app.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

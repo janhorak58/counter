@@ -1,0 +1,78 @@
+models:
+  yolov8s_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolov8s_v13/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  yolov8m_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolov8m_v12/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    
+  yolo11m_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo11m_v11/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  yolo11l_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo11l_v11/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  yolo26s_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo26s_v11/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  yolo26l_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo26l_v11/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  yolo26x_tuned:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo26x_v11/weights/best.pt
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  rfdetr_large_tuned:
+    backend: rfdetr
+    variant: tuned
+    weights: models/rfdetr/v1/rfdetr_large_v3/checkpoint_best_total.pth
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  rfdetr_small_tuned:
+    backend: rfdetr
+    variant: tuned
+    weights: models/rfdetr/v1/rfdetr_small_v6/checkpoint_best_total.pth
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  rfdetr_medium_tuned:
+    backend: rfdetr
+    variant: tuned
+    weights: models/rfdetr/v1/rfdetr_medium_v2/checkpoint_best_total.pth
+    mapping_policy: tuned
+    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+
+  coco_pretrained_baseline:
+    backend: yolo
+    variant: pretrained
+    weights: yolov8m.pt
+    mapping_policy: coco_baseline
+    # COCO ids: person=0, bicycle=1, dog=16, skis=30
+    coco_ids: {person: 0, bicycle: 1, dog: 16, skis: 30}

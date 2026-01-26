@@ -1,0 +1,25 @@
+model_id: yolo11m_tuned
+
+videos_dir: data/videos
+videos: [vid16.mp4, vid17.mp4, vid18.mp4]
+device: cpu 
+
+line:
+  name: Line_1
+  start: [846, 404]
+  end: [1328, 456]
+greyzone_px: 20.0
+
+thresholds:
+  conf: 0.35
+  iou: 0.35
+
+tracking:
+  type: bytetrack
+  params:
+    track_thresh: 0.25
+    match_thresh: 0.8
+
+export:
+  out_dir: runs/predict
+  save_video: false
