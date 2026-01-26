@@ -20,3 +20,7 @@ class TrackProvider(ABC):
     @abstractmethod
     def update(self, frame_bgr: np.ndarray) -> List[RawTrack]:
         ...
+
+    def reset(self) -> None:
+        """Optional hook to clear tracker state between videos."""
+        return None

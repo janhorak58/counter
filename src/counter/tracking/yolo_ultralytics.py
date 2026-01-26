@@ -71,3 +71,12 @@ class UltralyticsYoloTrackProvider(TrackProvider):
                 )
             )
         return out
+
+    def reset(self) -> None:
+        # Best-effort reset of internal tracker state between videos.
+        try:
+            predictor = getattr(self.model, "predictor", None)
+            if predictor is not None and hasattr(predictor, "tracker"):
+                predictor.tracker = None
+        except Exception:
+            pass

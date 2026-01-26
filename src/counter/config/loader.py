@@ -19,6 +19,11 @@ def load_models_registry(path: str | Path) -> ModelsRegistry:
     return ModelsRegistry.model_validate(data)
 
 
+def load_models(path: str | Path) -> ModelsRegistry:
+    # Backwards-compatible alias used by CLI and older code.
+    return load_models_registry(path)
+
+
 def load_predict_config(path: str | Path) -> PredictConfig:
     data = load_yaml(path)
     return PredictConfig.model_validate(data)

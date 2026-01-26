@@ -123,6 +123,7 @@ class PredictPipeline:
             line_end=tuple(cfg.line.end),
             greyzone_px=float(cfg.greyzone_px),
             class_ids=[int(c) for c in CanonicalClass],
+            finalize_counts=mapper.finalize_counts,
         )
 
         outputs: List[str] = []
@@ -156,8 +157,8 @@ class PredictPipeline:
                 t0 = time.time()
                 frame_i = 0
 
-                for frame_bgr in iter_frames(str(video_path)):
-                    frame_i += 1
+                for frame_idx, frame_bgr in iter_frames(str(video_path)):
+                    frame_i = frame_idx + 1
 
                     raw_tracks = provider.update(frame_bgr)
                     mapped = mapper.map_tracks(raw_tracks)

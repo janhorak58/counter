@@ -155,8 +155,6 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
         iou: float,
         class_map: Optional[Dict[int, int]] = None,
     ) -> None:
-        super().__init__(class_map=class_map)
-
         from rfdetr import RFDetr  # lazy import
 
         self.conf = float(conf)
@@ -190,7 +188,7 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
         except Exception:
             pass
 
-    def update(self, frame_bgr: np.ndarray, frame_idx: int) -> List[RawTrack]:
+    def update(self, frame_bgr: np.ndarray) -> List[RawTrack]:
         # většina wrapperů čeká RGB
         img = frame_bgr[:, :, ::-1]
 
@@ -215,16 +213,14 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
                 continue
 
             x1, y1, x2, y2 = [float(v) for v in xyxy[i]]
-            cls = self.map_class(int(class_id[i]))
-            if cls < 0:
-                continue
-
+            raw_cls = int(class_id[i])
             tracks.append(
                 RawTrack(
                     track_id=int(i),  # RF-DETR nedává stabilní ID
-                    xyxy=(x1, y1, x2, y2),
-                    cls=cls,
-                    conf=conf,
+                    bbox=(x1, y1, x2, y2),
+                    score=conf,
+                    raw_class_id=raw_cls,
+                    raw_class_name=str(raw_cls),
                 )
             )
 
