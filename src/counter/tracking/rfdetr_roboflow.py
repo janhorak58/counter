@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
+import pickle
+
 
 from counter.tracking.providers import TrackProvider, RawTrack
 
@@ -78,21 +80,38 @@ def _filter_by_shape(model_sd: Dict[str, Any], ckpt_sd: Dict[str, Any]) -> Tuple
 
     return filtered, dropped_missing, dropped_shape
 
-
 def _load_checkpoint_partial(model_obj: Any, weights_path: str) -> None:
     """
     Loads checkpoint into RFDETR wrapper instance partially (shape-matched only).
-    Works with Roboflow `rfdetr` wrapper where torch model is typically at `.model`.
+    NOTE: PyTorch 2.6+ defaults torch.load(weights_only=True). Our checkpoints may include
+    argparse.Namespace etc., so we force weights_only=False for trusted local checkpoints.
     """
     if torch is None:
         raise ImportError("torch is required to load RF-DETR checkpoints.")
 
-    # get underlying torch.nn.Module
     torch_model = getattr(model_obj, "model", None)
     if torch_model is None:
         raise RuntimeError("RFDETR wrapper has no `.model` attribute; can't partial-load checkpoint.")
 
-    ckpt = torch.load(weights_path, map_location="cpu")
+    # ---- robust load across torch versions ----
+    def _torch_load_any(path: str):
+        # Prefer explicit weights_only=False (trusted checkpoint)
+        try:
+            return torch.load(path, map_location="cpu", weights_only=False)
+        except TypeError:
+            # older torch without weights_only arg
+            return torch.load(path, map_location="cpu")
+
+    try:
+        ckpt = _torch_load_any(weights_path)
+    except pickle.UnpicklingError as e:
+        raise RuntimeError(
+            "torch.load failed due to weights_only safe-unpickling rules.\n"
+            "If this is YOUR checkpoint, load with weights_only=False (already attempted).\n"
+            "If it still fails, the file may be corrupted.\n"
+            f"weights={weights_path}\nerror={e}"
+        )
+
     ckpt_sd = _extract_state_dict(ckpt)
     if not ckpt_sd:
         raise RuntimeError(f"Could not extract state_dict from checkpoint: {weights_path}")
@@ -100,13 +119,11 @@ def _load_checkpoint_partial(model_obj: Any, weights_path: str) -> None:
     model_sd = torch_model.state_dict()
     filtered, dropped_missing, dropped_shape = _filter_by_shape(model_sd, ckpt_sd)
 
-    msg = (
+    print(
         f"[RFDETR] Partial load: keep={len(filtered)} / ckpt={len(ckpt_sd)} "
         f"(dropped_missing={len(dropped_missing)}, dropped_shape={len(dropped_shape)})"
     )
-    print(msg)
 
-    # finally load
     torch_model.load_state_dict(filtered, strict=False)
 
 
