@@ -191,7 +191,8 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
 
     def update(self, frame_bgr: np.ndarray) -> List[RawTrack]:
         # většina wrapperů čeká RGB
-        img = frame_bgr[:, :, ::-1]
+        # Ensure positive strides (some libraries dislike negative strides).
+        img = frame_bgr[:, :, ::-1].copy()
 
         dets = self.model.predict(img)
 
