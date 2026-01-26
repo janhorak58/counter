@@ -1,373 +1,262 @@
 from __future__ import annotations
 
-import base64
-import logging
-import time
 from dataclasses import asdict
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
+import time
 
 import cv2
-from PIL import Image
+import numpy as np
 
-from counter.config.loader import load_predict_config
 from counter.config.schema import PredictConfig
-from counter.counting.net_state import NetStateCounter
-from counter.domain.model_spec import ModelSpec, load_models
-from counter.domain.runmeta import CountsResult, RunMeta
-from counter.io.export import dump_json, ensure_dir
-from counter.io.video import VideoInfo, get_video_info
-from counter.mapping.factory import create_mapper
+from counter.domain.model_spec import load_models
+from counter.domain.results import CountsResult, RunMeta
+from counter.domain.types import CanonicalClass
+from counter.io.export import dump_json, ensure_dir, save_counts_json
+from counter.io.video import get_video_info
+from counter.mapping.factory import MappingFactory
 from counter.tracking.factory import TrackerFactory
-from counter.tracking.providers import TrackProvider
 
 
-def _setup_logger(log_path: Path) -> logging.Logger:
+def _now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def _write_log_line(log_path: Path, line: str) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger(f"predict.{log_path.parent.parent.name}")
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-
-    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
-    fh = logging.FileHandler(str(log_path), encoding="utf-8")
-    fh.setFormatter(fmt)
-    sh = logging.StreamHandler()
-    sh.setFormatter(fmt)
-
-    logger.addHandler(fh)
-    logger.addHandler(sh)
-    logger.propagate = False
-    return logger
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(line.rstrip() + "\n")
 
 
-def _draw_overlay(
-    frame_bgr,
-    tracks,
-    line_xyxy: Tuple[int, int, int, int],
-    frame_i_1based: int,
-    frame_total: int,
+def _class_name(cid: int) -> str:
+    try:
+        return CanonicalClass(cid).name
+    except Exception:
+        return str(cid)
+
+
+def _draw_boxes_and_hud(
+    frame_bgr: np.ndarray,
+    tracks: List[Any],
+    frame_idx: int,
+    frame_count: int,
     *,
-    blink_every_n_frames: int = 10,
-) -> None:
-    """Draws tracks + counting line + blinking frame counter in-place."""
-    x1, y1, x2, y2 = line_xyxy
-    cv2.line(frame_bgr, (x1, y1), (x2, y2), (0, 255, 255), 2)
+    flash_every_n_frames: int = 12,
+) -> np.ndarray:
+    out = frame_bgr
 
     for t in tracks:
-        bx1, by1, bx2, by2 = [int(v) for v in t.bbox_xyxy]
-        cv2.rectangle(frame_bgr, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
-
-        label = f"id={t.track_id} c={t.class_id}"
-        cv2.putText(
-            frame_bgr,
-            label,
-            (bx1, max(0, by1 - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 0, 0),
-            3,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame_bgr,
-            label,
-            (bx1, max(0, by1 - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-
-    visible = True if blink_every_n_frames <= 0 else ((frame_i_1based // blink_every_n_frames) % 2) == 0
-    if visible:
-        txt = f"Frame {frame_i_1based}/{frame_total}"
-        cv2.putText(frame_bgr, txt, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame_bgr, txt, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
-
-
-def _encode_preview_jpg(
-    frame_bgr,
-    tracks,
-    line_xyxy: Tuple[int, int, int, int],
-    frame_i_1based: int,
-    frame_total: int,
-    max_width: int = 960,
-) -> str:
-    """Returns base64-encoded JPEG for Streamlit preview."""
-    h, w = frame_bgr.shape[:2]
-    if max_width > 0 and w > max_width:
-        scale = float(max_width) / float(w)
-        frame_bgr = cv2.resize(frame_bgr, (int(w * scale), int(h * scale)))
-        x1, y1, x2, y2 = line_xyxy
-        line_xyxy = (int(x1 * scale), int(y1 * scale), int(x2 * scale), int(y2 * scale))
-
-    _draw_overlay(frame_bgr, tracks, line_xyxy, frame_i_1based, frame_total)
-
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(frame_rgb)
-    bio = BytesIO()
-    img.save(bio, format="JPEG", quality=85)
-    return base64.b64encode(bio.getvalue()).decode("utf-8")
-
-
-def dump_json_line(obj: Dict[str, Any]) -> str:
-    import json
-
-    return json.dumps(obj, ensure_ascii=False)
-
-
-def _emit_counts_event(
-    cfg: PredictConfig,
-    spec: ModelSpec,
-    tracker: TrackProvider,
-    counts: CountsResult,
-    frame_bgr,
-    tracks,
-    frame_i_1based: int,
-    frame_total: int,
-) -> None:
-    """Push a lightweight event to be polled by Streamlit UI (predict_events.jsonl)."""
-    events_path = Path(cfg.export.out_dir) / spec.run_id / "predict" / "predict_events.jsonl"
-    events_path.parent.mkdir(parents=True, exist_ok=True)
-
-    line_xyxy = (*cfg.line.start, *cfg.line.end)
-
-    jpg_b64: Optional[str] = None
-    if cfg.preview.enabled:
         try:
-            jpg_b64 = _encode_preview_jpg(
-                frame_bgr.copy(),
-                tracks,
-                line_xyxy,
-                frame_i_1based,
-                frame_total,
-                max_width=cfg.preview.max_width,
-            )
+            x1, y1, x2, y2 = [int(v) for v in t.xyxy]
+            cls = int(getattr(t, "cls", -1))
+            conf = float(getattr(t, "conf", 0.0))
         except Exception:
-            jpg_b64 = None
+            continue
 
-    event = {
-        "ts": datetime.now().isoformat(),
-        "video": counts.video,
-        "frame": frame_i_1based,
-        "frame_total": frame_total,
-        "counts": {"in": counts.in_count, "out": counts.out_count},
-        "jpg_b64": jpg_b64,
-    }
+        label = f"{_class_name(cls)} {conf:.2f}"
+        cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(out, label, (x1, max(20, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
-    with open(events_path, "a", encoding="utf-8") as f:
-        f.write(dump_json_line(event) + "\n")
+    # blikání: každých N snímků přepnout viditelnost
+    if flash_every_n_frames > 0 and (frame_idx // flash_every_n_frames) % 2 == 0:
+        msg = f"Frame {frame_idx}/{max(0, frame_count-1)}"
+        cv2.putText(out, msg, (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 3)
+
+    return out
 
 
 class PredictPipeline:
-    def __init__(self, models_yaml: str = "configs/models.yaml"):
-        self.models_yaml = models_yaml
-        self.models = load_models(models_yaml)
+    def __init__(self, models_yaml: str | Path = "configs/models.yaml") -> None:
+        self.models_yaml = str(models_yaml)
 
-    def run(self, cfg: PredictConfig) -> Path:
-        if cfg.model_id not in self.models:
-            raise KeyError(f"Unknown model_id: {cfg.model_id}. Available: {list(self.models.keys())}")
+    def run(self, cfg: PredictConfig) -> str:
+        models = load_models(self.models_yaml)
+        if cfg.model_id not in models:
+            raise KeyError(f"Unknown model_id: {cfg.model_id}. Available: {list(models.keys())[:15]}...")
 
-        spec = self.models[cfg.model_id]
+        spec = models[cfg.model_id]
 
-        run_dir = ensure_dir(Path(cfg.export.out_dir) / spec.run_id)
-        predict_dir = ensure_dir(run_dir / "predict")
+        run_id = f"{spec.backend}_{spec.variant}__{cfg.model_id}"
+        run_dir = ensure_dir(Path(cfg.out_dir) / "predict" / run_id)
+        pred_dir = ensure_dir(run_dir / "predict")
 
-        logger = _setup_logger(predict_dir / "predict.log")
-        logger.info("Starting predict")
-        logger.info("run_id=%s model_id=%s backend=%s variant=%s", spec.run_id, cfg.model_id, spec.backend, spec.variant)
-        logger.info("videos_dir=%s videos=%s", cfg.videos_dir, cfg.videos)
-        logger.info("thresholds=%s tracking=%s export=%s", asdict(cfg.thresholds), asdict(cfg.tracking), asdict(cfg.export))
+        log_path = pred_dir / "run.log"
+        _write_log_line(log_path, f"[{_now_iso()}] START run_id={run_id} model_id={cfg.model_id} backend={spec.backend} variant={spec.variant}")
+        _write_log_line(log_path, f"[{_now_iso()}] cfg: videos_dir={cfg.videos_dir} videos={cfg.videos} device={cfg.device} conf={cfg.conf} iou={cfg.iou} greyzone_px={cfg.greyzone_px} save_video={cfg.save_video}")
+
+        mapper = MappingFactory.create(
+            policy=spec.mapping_policy,
+            class_map=spec.class_map,
+            coco_ids=spec.coco_ids,
+        )
 
         provider = TrackerFactory.create(
             spec=spec,
-            thresholds={"conf": cfg.conf, "iou": cfg.iou},
-            tracker_cfg=cfg.tracking,
             device=cfg.device,
+            conf=cfg.conf,
+            iou=cfg.iou,
+            tracking_cfg=cfg.tracking,
+            mapping=mapper,
+            logger=lambda s: _write_log_line(log_path, f"[{_now_iso()}] {s}"),
         )
-        mapper = create_mapper(spec)
 
-        video_counts: List[CountsResult] = []
+        created_at = datetime.utcnow().isoformat()
+        base_meta = RunMeta(
+            run_id=run_id,
+            created_at=created_at,
+            model_id=cfg.model_id,
+            backend=spec.backend,
+            variant=spec.variant,
+            weights=str(spec.weights or ""),
+            mapping_policy=str(spec.mapping_policy or ""),
+            thresholds={"conf": cfg.conf, "iou": cfg.iou},
+            tracker={"type": cfg.tracking.type, "params": cfg.tracking.params, "tracker_yaml": cfg.tracking.tracker_yaml},
+            line=asdict(cfg.line),
+            greyzone_px=float(cfg.greyzone_px),
+            video={},
+            extra={"log": str(log_path)},
+        ).to_dict()
+
         outputs: List[str] = []
-        started_s = time.time()
+        processed_videos: List[str] = []
         status = "completed"
-        error_msg = ""
+
+        aggregate_in: Dict[int, int] = {}
+        aggregate_out: Dict[int, int] = {}
+
+        videos = cfg.videos or []
+        if not videos:
+            p = Path(cfg.videos_dir)
+            if p.exists():
+                videos = [f.name for f in sorted(p.glob("*.mp4"))]
 
         try:
-            for video in cfg.videos:
-                video_path = Path(cfg.videos_dir) / video
-                if not video_path.exists():
-                    alt = Path(video)
-                    if alt.exists():
-                        video_path = alt
-                    else:
-                        logger.warning("Skipping missing video: %s", str(video_path))
-                        continue
-
-                vinfo: VideoInfo = get_video_info(str(video_path))
-                cap = cv2.VideoCapture(str(video_path))
-                if not cap.isOpened():
-                    logger.warning("Failed to open video: %s", str(video_path))
+            for vid in videos:
+                vpath = Path(cfg.videos_dir) / vid
+                if not vpath.exists():
+                    _write_log_line(log_path, f"[{_now_iso()}] SKIP missing video={vpath}")
                     continue
 
-                logger.info("Processing video=%s fps=%.3f frames=%d", str(video_path), float(vinfo.fps), int(vinfo.frame_count))
+                t0 = time.time()
+                vinfo = get_video_info(str(vpath))
+
+                cap = cv2.VideoCapture(str(vpath))
+                if not cap.isOpened():
+                    _write_log_line(log_path, f"[{_now_iso()}] ERROR cannot open video={vpath}")
+                    continue
 
                 writer = None
-                if cfg.export.save_video and vinfo.width > 0 and vinfo.height > 0:
-                    out_vid_path = predict_dir / f"{video_path.stem}.pred.mp4"
+                out_video_path = None
+                if cfg.save_video:
+                    out_video_path = pred_dir / f"{Path(vid).stem}.pred.mp4"
                     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                     writer = cv2.VideoWriter(
-                        str(out_vid_path),
+                        str(out_video_path),
                         fourcc,
-                        float(vinfo.fps) or 25.0,
+                        float(vinfo.fps or 25.0),
                         (int(vinfo.width), int(vinfo.height)),
                     )
-                    outputs.append(str(out_vid_path).replace("\\", "/"))
-                    logger.info("Saving annotated video to %s", str(out_vid_path))
 
-                provider.reset()
-                mapper.reset()
-
-                counter = NetStateCounter(
-                    line_name=cfg.line.name,
-                    start_xy=tuple(cfg.line.start),
-                    end_xy=tuple(cfg.line.end),
-                    greyzone_px=cfg.greyzone_px,
+                from counter.counting.line_counter import LineCounter
+                counter = LineCounter(
+                    line_start=tuple(cfg.line.start),
+                    line_end=tuple(cfg.line.end),
+                    greyzone_px=float(cfg.greyzone_px),
                 )
 
                 frame_idx = 0
-                next_preview_frame = 1 if cfg.preview.enabled else -1
-                frame_total = int(vinfo.frame_count) if int(vinfo.frame_count) > 0 else 1
-
                 while True:
-                    ok, frame_bgr = cap.read()
+                    ok, frame = cap.read()
                     if not ok:
                         break
-                    frame_idx += 1
 
-                    raw_tracks = provider.update(frame_bgr)
-                    tracks = mapper.map_tracks(raw_tracks)
+                    tracks = provider.update(frame, frame_idx)
                     counter.update(tracks)
 
                     if writer is not None:
-                        _draw_overlay(frame_bgr, tracks, (*cfg.line.start, *cfg.line.end), frame_idx, frame_total)
-                        writer.write(frame_bgr)
+                        annotated = _draw_boxes_and_hud(frame, tracks, frame_idx, int(vinfo.frame_count or 0))
+                        writer.write(annotated)
 
-                    if cfg.preview.enabled and cfg.preview.every_n_frames > 0 and frame_idx >= next_preview_frame:
-                        counts_tmp = CountsResult(
-                            video=video_path.name,
-                            line_name=cfg.line.name,
-                            in_count=counter.in_counts(),
-                            out_count=counter.out_counts(),
-                            meta={},
-                        )
-                        _emit_counts_event(cfg, spec, provider, counts_tmp, frame_bgr, tracks, frame_idx, frame_total)
-                        next_preview_frame = frame_idx + int(cfg.preview.every_n_frames)
-
-                    if frame_idx % 500 == 0:
-                        logger.info("Progress %s: frame %d/%d", video_path.stem, frame_idx, frame_total)
+                    frame_idx += 1
 
                 cap.release()
                 if writer is not None:
                     writer.release()
 
-                counts = CountsResult(
-                    video=video_path.stem,
+                fin_in, fin_out = counter.get_counts()
+
+                for cid in CanonicalClass:
+                    fin_in.setdefault(int(cid), 0)
+                    fin_out.setdefault(int(cid), 0)
+
+                for k, v in fin_in.items():
+                    aggregate_in[k] = aggregate_in.get(k, 0) + int(v)
+                for k, v in fin_out.items():
+                    aggregate_out[k] = aggregate_out.get(k, 0) + int(v)
+
+                meta = dict(base_meta)
+                meta["video"] = asdict(vinfo)
+
+                res = CountsResult(
+                    video=vid,
                     line_name=cfg.line.name,
-                    in_count=counter.in_counts(),
-                    out_count=counter.out_counts(),
-                    meta={
-                        "spec": asdict(spec),
-                        "cfg": cfg.model_dump(),
-                        "video": asdict(vinfo),
-                    },
-                )
-                out_counts = predict_dir / f"{video_path.stem}.counts.json"
-                dump_json(out_counts, counts.to_dict())
-                outputs.append(str(out_counts).replace("\\", "/"))
-
-                video_counts.append(counts)
-
-                logger.info(
-                    "Done %s: IN_total=%d OUT_total=%d",
-                    video_path.stem,
-                    sum(int(v) for v in counts.in_count.values()),
-                    sum(int(v) for v in counts.out_count.values()),
+                    in_count=fin_in,
+                    out_count=fin_out,
+                    meta=meta,
                 )
 
-            if video_counts:
-                agg_in: Dict[str, int] = {}
-                agg_out: Dict[str, int] = {}
-                for c in video_counts:
-                    for k, v in c.in_count.items():
-                        agg_in[k] = agg_in.get(k, 0) + int(v)
-                    for k, v in c.out_count.items():
-                        agg_out[k] = agg_out.get(k, 0) + int(v)
+                out_file = pred_dir / f"{Path(vid).stem}.counts.json"
+                save_counts_json(out_file, res)
+                outputs.append(str(out_file))
+                processed_videos.append(Path(vid).stem)
 
-                aggregate = CountsResult(
-                    video="aggregate",
-                    line_name=cfg.line.name,
-                    in_count=agg_in,
-                    out_count=agg_out,
-                    meta={"spec": asdict(spec), "cfg": cfg.model_dump()},
+                if out_video_path is not None:
+                    outputs.append(str(out_video_path))
+
+                dt = max(1e-9, time.time() - t0)
+                fps_eff = float(frame_idx / dt)
+                _write_log_line(
+                    log_path,
+                    f"[{_now_iso()}] DONE video={vid} frames={frame_idx} sec={dt:.2f} fps={fps_eff:.2f} in_total={sum(fin_in.values())} out_total={sum(fin_out.values())} saved_video={bool(out_video_path)}",
                 )
-                out_agg = predict_dir / "aggregate.counts.json"
-                dump_json(out_agg, aggregate.to_dict())
-                outputs.append(str(out_agg).replace("\\", "/"))
 
+        except KeyboardInterrupt:
+            status = "cancelled"
+            _write_log_line(log_path, f"[{_now_iso()}] CANCELLED by KeyboardInterrupt")
         except Exception as e:
             status = "failed"
-            error_msg = repr(e)
-            logger.exception("Prediction failed: %s", error_msg)
+            _write_log_line(log_path, f"[{_now_iso()}] FAILED error={e}")
             raise
         finally:
-            run_meta = RunMeta(
-                run_id=spec.run_id,
-                created_at=datetime.now().isoformat(),
-                model_id=cfg.model_id,
-                backend=spec.backend,
-                variant=spec.variant,
-                weights=spec.weights or "",
-                mapping_policy=spec.mapping_policy or "",
-                thresholds={"conf": cfg.conf, "iou": cfg.iou},
-                tracker={"type": cfg.tracking.type, "params": cfg.tracking.params, "tracker_yaml": cfg.tracking.tracker_yaml},
-                line={"name": cfg.line.name, "start": cfg.line.start, "end": cfg.line.end},
-                greyzone_px=cfg.greyzone_px,
-                video={"videos_dir": cfg.videos_dir, "videos": cfg.videos},
-                extra={
-                    "source": "predict_pipeline",
-                    "status": status,
-                    "duration_s": float(time.time() - started_s),
-                },
+            agg_meta = dict(base_meta)
+            agg_meta["status"] = status
+            agg_meta["processed_videos"] = processed_videos
+
+            agg = CountsResult(
+                video="__aggregate__",
+                line_name=cfg.line.name,
+                in_count=aggregate_in,
+                out_count=aggregate_out,
+                meta=agg_meta,
             )
+            agg_file = pred_dir / "aggregate.counts.json"
+            save_counts_json(agg_file, agg)
+            outputs.append(str(agg_file))
 
-            meta_dict = run_meta.to_dict()
-            meta_dict["type"] = "predict"
-            meta_dict["status"] = status
-            meta_dict["outputs"] = outputs
-            meta_dict["processed_videos"] = [c.video for c in video_counts]
-            if error_msg:
-                meta_dict["error"] = error_msg
+            run_json = {
+                "type": "predict",
+                "status": status,
+                "run_id": run_id,
+                "model_id": cfg.model_id,
+                "backend": spec.backend,
+                "variant": spec.variant,
+                "created_at": created_at,
+                "outputs": outputs,
+                "processed_videos": processed_videos,
+                "extra": {"source": "predict_pipeline", "log": str(log_path)},
+            }
+            dump_json(run_dir / "run.json", run_json)
+            _write_log_line(log_path, f"[{_now_iso()}] END status={status} outputs={len(outputs)}")
 
-            dump_json(run_dir / "run.json", meta_dict)
-            logger.info("Finished predict status=%s duration_s=%.2f", status, meta_dict["extra"]["duration_s"])
-
-        return run_dir
-
-
-def run_predict_cli(config_path: str, models_yaml: str, *, model_id: Optional[str] = None, video: Optional[str] = None) -> Path:
-    cfg = load_predict_config(config_path)
-    if model_id:
-        cfg.model_id = model_id
-    if video:
-        p = Path(video)
-        if p.exists() and p.is_absolute():
-            cfg.videos_dir = str(p.parent)
-            cfg.videos = [p.name]
-        else:
-            cfg.videos = [video]
-    pipe = PredictPipeline(models_yaml=models_yaml)
-    return pipe.run(cfg)
+        return run_id
