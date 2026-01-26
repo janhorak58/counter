@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -155,7 +156,7 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
         iou: float,
         class_map: Optional[Dict[int, int]] = None,
     ) -> None:
-        from rfdetr import RFDetr  # lazy import
+        RFDetr = _import_rfdetr()
 
         self.conf = float(conf)
         self.iou = float(iou)
@@ -225,3 +226,38 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
             )
 
         return tracks
+
+
+def _import_rfdetr():
+    """Best-effort import for RF-DETR class across versions."""
+    candidates = [
+        ("rfdetr", "RFDetr"),
+        ("rfdetr", "RFDETR"),
+        ("rfdetr", "RfDetr"),
+        ("rfdetr.model", "RFDetr"),
+        ("rfdetr.model", "RFDETR"),
+        ("rfdetr.core", "RFDetr"),
+        ("rfdetr.predictor", "RFDetr"),
+    ]
+    last_err: Exception | None = None
+    for mod_name, cls_name in candidates:
+        try:
+            mod = importlib.import_module(mod_name)
+            cls = getattr(mod, cls_name, None)
+            if cls is not None:
+                return cls
+        except Exception as e:
+            last_err = e
+            continue
+    try:
+        import rfdetr as _rfdetr  # type: ignore
+        available = ", ".join(sorted([k for k in dir(_rfdetr) if "Detr" in k or "DETR" in k]))
+        raise ImportError(
+            "Could not find RF-DETR class in installed `rfdetr` package. "
+            f"Checked {candidates}. Available symbols: {available or '(none)'}"
+        )
+    except Exception as e:
+        raise ImportError(
+            "Could not import RF-DETR class from `rfdetr`. "
+            "Please check your installed rfdetr version and API."
+        ) from (last_err or e)
