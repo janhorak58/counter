@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from counter.tracking.providers import TrackProvider, RawTrack
@@ -14,6 +14,11 @@ try:  # pragma: no cover
     from rfdetr import RFDETRBase, RFDETRLarge, RFDETRMedium, RFDETRSmall, RFDETRNano  # type: ignore
 except Exception:  # pragma: no cover
     RFDETRBase = RFDETRLarge = RFDETRMedium = RFDETRSmall = RFDETRNano = None
+
+try:  # pragma: no cover
+    import torch  # type: ignore
+except Exception:  # pragma: no cover
+    torch = None
 
 
 def _pick_model_cls(size: str | None):
@@ -29,17 +34,89 @@ def _pick_model_cls(size: str | None):
     return RFDETRBase
 
 
+def _extract_state_dict(ckpt: Any) -> Dict[str, Any]:
+    """
+    Accepts common checkpoint shapes:
+      - {"model": {...}}
+      - {"state_dict": {...}}
+      - {"model_state_dict": {...}}
+      - already a raw state_dict
+    """
+    if isinstance(ckpt, dict):
+        for k in ("model", "state_dict", "model_state_dict"):
+            v = ckpt.get(k)
+            if isinstance(v, dict) and v:
+                return v
+        # fallback: sometimes the dict itself IS the state_dict
+        # (heuristic: contains tensor-like values)
+        if any(hasattr(v, "shape") for v in ckpt.values()):
+            return ckpt
+    return {}
+
+
+def _filter_by_shape(model_sd: Dict[str, Any], ckpt_sd: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str], List[str]]:
+    """
+    Keep only keys that exist in model AND have identical shape.
+    Returns: (filtered, dropped_missing, dropped_shape)
+    """
+    filtered: Dict[str, Any] = {}
+    dropped_missing: List[str] = []
+    dropped_shape: List[str] = []
+
+    for k, v in ckpt_sd.items():
+        if k not in model_sd:
+            dropped_missing.append(k)
+            continue
+        try:
+            if hasattr(v, "shape") and hasattr(model_sd[k], "shape") and tuple(v.shape) != tuple(model_sd[k].shape):
+                dropped_shape.append(k)
+                continue
+        except Exception:
+            dropped_shape.append(k)
+            continue
+        filtered[k] = v
+
+    return filtered, dropped_missing, dropped_shape
+
+
+def _load_checkpoint_partial(model_obj: Any, weights_path: str) -> None:
+    """
+    Loads checkpoint into RFDETR wrapper instance partially (shape-matched only).
+    Works with Roboflow `rfdetr` wrapper where torch model is typically at `.model`.
+    """
+    if torch is None:
+        raise ImportError("torch is required to load RF-DETR checkpoints.")
+
+    # get underlying torch.nn.Module
+    torch_model = getattr(model_obj, "model", None)
+    if torch_model is None:
+        raise RuntimeError("RFDETR wrapper has no `.model` attribute; can't partial-load checkpoint.")
+
+    ckpt = torch.load(weights_path, map_location="cpu")
+    ckpt_sd = _extract_state_dict(ckpt)
+    if not ckpt_sd:
+        raise RuntimeError(f"Could not extract state_dict from checkpoint: {weights_path}")
+
+    model_sd = torch_model.state_dict()
+    filtered, dropped_missing, dropped_shape = _filter_by_shape(model_sd, ckpt_sd)
+
+    msg = (
+        f"[RFDETR] Partial load: keep={len(filtered)} / ckpt={len(ckpt_sd)} "
+        f"(dropped_missing={len(dropped_missing)}, dropped_shape={len(dropped_shape)})"
+    )
+    print(msg)
+
+    # finally load
+    torch_model.load_state_dict(filtered, strict=False)
+
+
 class RoboflowRfDetrTrackProvider(TrackProvider):
     """RF-DETR via Roboflow's `rfdetr` library + Supervision ByteTrack.
 
-    - Inference: `model.predict(image, threshold=...)` returns `supervision.Detections`.
-      This is exactly how RF-DETR docs show it.  
-    - Tracking: Supervision ByteTrack is the reference implementation used in Roboflow ecosystem. 
-
-    Notes:
-    - We intentionally *don't* implement ByteTrack ourselves.
-    - `weights` may be an empty string for official pre-trained weights (library downloads them).
-      For fine-tuned checkpoints, pass the checkpoint path via `pretrain_weights=...`. 
+    Important:
+    - Some tuned checkpoints may be incompatible with the installed `rfdetr` model config
+      (e.g. patch size 16 vs 14, different pos embeddings). In that case we partial-load
+      only shape-matching keys to avoid hard crashes.
     """
 
     def __init__(
@@ -64,12 +141,23 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
             raise ImportError("rfdetr model classes not found. Check your rfdetr install/version.")
 
         w = (weights or "").strip()
-        if w and w.lower() not in {"pretrained", "default"}:
-            self.model = ModelCls(pretrain_weights=w)
-        else:
-            self.model = ModelCls()
+        use_custom = bool(w) and w.lower() not in {"pretrained", "default"}
 
-        # Supervision ByteTrack tracker (no manual implementation)
+        # 1) Create model WITHOUT loading custom weights in constructor (avoids crash on mismatch)
+        self.model = ModelCls()
+
+        # 2) If custom checkpoint provided, try partial load (shape-matched only)
+        if use_custom:
+            try:
+                _load_checkpoint_partial(self.model, w)
+            except Exception as e:
+                raise RuntimeError(
+                    "Failed to load RF-DETR tuned checkpoint. "
+                    "This usually means checkpoint is incompatible with current `rfdetr` version/config.\n"
+                    f"weights={w}\nerror={e}"
+                )
+
+        # Supervision ByteTrack tracker
         self.tracker = sv.ByteTrack(
             track_activation_threshold=float(bytetrack_track_thresh),
             lost_track_buffer=int(bytetrack_buffer),
@@ -89,18 +177,13 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
             self._names = None
 
     def update(self, frame_bgr: np.ndarray) -> List[RawTrack]:
-        # RF-DETR docs use RGB input; OpenCV gives BGR.
         frame_rgb = frame_bgr[:, :, ::-1].copy()
-
         detections = self.model.predict(frame_rgb, threshold=self.conf)
 
-        # Ensure we have a Supervision Detections object
         if not hasattr(detections, "xyxy"):
             return []
 
         tracked = self.tracker.update_with_detections(detections)
-
-        # Supervision stores tracker ids in `tracker_id` (np.ndarray) after tracking.
         if getattr(tracked, "tracker_id", None) is None:
             return []
 
