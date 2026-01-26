@@ -69,6 +69,16 @@ def _resolve_bytetrack_yaml(
     return str(out_path)
 
 
+def _infer_rfdetr_size(spec: ModelSpec) -> str:
+    if spec.rfdetr_size:
+        return str(spec.rfdetr_size)
+    name = (spec.model_id or "").lower()
+    for size in ("small", "medium", "large"):
+        if size in name:
+            return size
+    return "medium"
+
+
 class TrackerFactory:
     """Pragmatic factory: returns TrackProvider that yields RawTrack (track_id + bbox + raw class)."""
 
@@ -103,8 +113,10 @@ class TrackerFactory:
                 )
             return RoboflowRfDetrTrackProvider(
                 weights=str(spec.weights),
-                size=spec.rfdetr_size,
+                model_size=_infer_rfdetr_size(spec),
+                device=device,
                 conf=float(conf),
+                iou=float(iou),
             )
 
         raise ValueError(f"Unsupported backend: {spec.backend}")
