@@ -1,188 +1,141 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
-import pickle
+
+from counter.domain.raw_track import RawTrack
+
+# RF-DETR + supervision
+from supervision import ByteTrack
+from rfdetr import RFDETRLarge, RFDETRMedium, RFDETRSmall
+
+import torch
+import argparse
 
 
-from counter.tracking.providers import TrackProvider, RawTrack
-
-try:  # pragma: no cover
-    import supervision as sv  # type: ignore
-except Exception:  # pragma: no cover
-    sv = None
-
-try:  # pragma: no cover
-    from rfdetr import RFDETRBase, RFDETRLarge, RFDETRMedium, RFDETRSmall, RFDETRNano  # type: ignore
-except Exception:  # pragma: no cover
-    RFDETRBase = RFDETRLarge = RFDETRMedium = RFDETRSmall = RFDETRNano = None
-
-try:  # pragma: no cover
-    import torch  # type: ignore
-except Exception:  # pragma: no cover
-    torch = None
-
-
-def _pick_model_cls(size: str | None):
-    size = (size or "base").lower()
-    if size == "nano":
-        return RFDETRNano
-    if size == "small":
-        return RFDETRSmall
-    if size == "medium":
-        return RFDETRMedium
-    if size == "large":
-        return RFDETRLarge
-    return RFDETRBase
-
-
-def _extract_state_dict(ckpt: Any) -> Dict[str, Any]:
+def _torch_load_trusted(path: str) -> Any:
     """
-    Accepts common checkpoint shapes:
-      - {"model": {...}}
-      - {"state_dict": {...}}
-      - {"model_state_dict": {...}}
-      - already a raw state_dict
+    PyTorch 2.6: default weights_only=True může shodit legacy checkpointy.
+    Tohle záměrně používá weights_only=False (pickle) -> dělej jen pro checkpointy,
+    kterým věříš (u tebe: vlastní trénink).
     """
-    if isinstance(ckpt, dict):
-        for k in ("model", "state_dict", "model_state_dict"):
-            v = ckpt.get(k)
-            if isinstance(v, dict) and v:
-                return v
-        # fallback: sometimes the dict itself IS the state_dict
-        # (heuristic: contains tensor-like values)
-        if any(hasattr(v, "shape") for v in ckpt.values()):
-            return ckpt
-    return {}
-
-
-def _filter_by_shape(model_sd: Dict[str, Any], ckpt_sd: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str], List[str]]:
-    """
-    Keep only keys that exist in model AND have identical shape.
-    Returns: (filtered, dropped_missing, dropped_shape)
-    """
-    filtered: Dict[str, Any] = {}
-    dropped_missing: List[str] = []
-    dropped_shape: List[str] = []
-
-    for k, v in ckpt_sd.items():
-        if k not in model_sd:
-            dropped_missing.append(k)
-            continue
-        try:
-            if hasattr(v, "shape") and hasattr(model_sd[k], "shape") and tuple(v.shape) != tuple(model_sd[k].shape):
-                dropped_shape.append(k)
-                continue
-        except Exception:
-            dropped_shape.append(k)
-            continue
-        filtered[k] = v
-
-    return filtered, dropped_missing, dropped_shape
-
-def _load_checkpoint_partial(model_obj: Any, weights_path: str) -> None:
-    """
-    Loads checkpoint into RFDETR wrapper instance partially (shape-matched only).
-    NOTE: PyTorch 2.6+ defaults torch.load(weights_only=True). Our checkpoints may include
-    argparse.Namespace etc., so we force weights_only=False for trusted local checkpoints.
-    """
-    if torch is None:
-        raise ImportError("torch is required to load RF-DETR checkpoints.")
-
-    torch_model = getattr(model_obj, "model", None)
-    if torch_model is None:
-        raise RuntimeError("RFDETR wrapper has no `.model` attribute; can't partial-load checkpoint.")
-
-    # ---- robust load across torch versions ----
-    def _torch_load_any(path: str):
-        # Prefer explicit weights_only=False (trusted checkpoint)
-        try:
-            return torch.load(path, map_location="cpu", weights_only=False)
-        except TypeError:
-            # older torch without weights_only arg
-            return torch.load(path, map_location="cpu")
-
     try:
-        ckpt = _torch_load_any(weights_path)
-    except pickle.UnpicklingError as e:
-        raise RuntimeError(
-            "torch.load failed due to weights_only safe-unpickling rules.\n"
-            "If this is YOUR checkpoint, load with weights_only=False (already attempted).\n"
-            "If it still fails, the file may be corrupted.\n"
-            f"weights={weights_path}\nerror={e}"
-        )
-
-    ckpt_sd = _extract_state_dict(ckpt)
-    if not ckpt_sd:
-        raise RuntimeError(f"Could not extract state_dict from checkpoint: {weights_path}")
-
-    model_sd = torch_model.state_dict()
-    filtered, dropped_missing, dropped_shape = _filter_by_shape(model_sd, ckpt_sd)
-
-    print(
-        f"[RFDETR] Partial load: keep={len(filtered)} / ckpt={len(ckpt_sd)} "
-        f"(dropped_missing={len(dropped_missing)}, dropped_shape={len(dropped_shape)})"
-    )
-
-    torch_model.load_state_dict(filtered, strict=False)
+        return torch.load(path, map_location="cpu", weights_only=False)
+    except TypeError:
+        # starší torch nemá weights_only
+        return torch.load(path, map_location="cpu")
 
 
-class RoboflowRfDetrTrackProvider(TrackProvider):
-    """RF-DETR via Roboflow's `rfdetr` library + Supervision ByteTrack.
+def _extract_state_dict(ckpt: Any) -> Dict[str, torch.Tensor]:
+    # nejčastější formáty
+    if isinstance(ckpt, dict):
+        for k in ("model", "state_dict", "model_state_dict", "net", "module"):
+            v = ckpt.get(k)
+            if isinstance(v, dict):
+                return v
+        # občas je state_dict přímo dict v rootu
+        if all(isinstance(x, torch.Tensor) for x in ckpt.values()):
+            return ckpt  # type: ignore
+    if isinstance(ckpt, dict):
+        return ckpt  # fallback
+    raise RuntimeError("Checkpoint does not look like a state_dict container.")
 
-    Important:
-    - Some tuned checkpoints may be incompatible with the installed `rfdetr` model config
-      (e.g. patch size 16 vs 14, different pos embeddings). In that case we partial-load
-      only shape-matching keys to avoid hard crashes.
+
+def _unwrap_torch_module(obj: Any, max_depth: int = 5) -> Optional[torch.nn.Module]:
+    """
+    rfdetr wrapper někdy drží torch model v různých atributech.
+    """
+    if isinstance(obj, torch.nn.Module):
+        return obj
+    if max_depth <= 0 or obj is None:
+        return None
+
+    # zkus typické atributy
+    for attr in ("model", "net", "module", "_model", "torch_model", "detr"):
+        if hasattr(obj, attr):
+            m = getattr(obj, attr)
+            out = _unwrap_torch_module(m, max_depth - 1)
+            if out is not None:
+                return out
+
+    return None
+
+
+def _load_state_dict_partial(module: torch.nn.Module, sd: Dict[str, torch.Tensor]) -> Tuple[int, int]:
+    """
+    Nahraje jen kompatibilní klíče (stejný tvar tensoru).
+    Vrací (loaded_keys, skipped_keys).
+    """
+    current = module.state_dict()
+    filtered: Dict[str, torch.Tensor] = {}
+    skipped = 0
+
+    for k, v in sd.items():
+        if k in current and hasattr(v, "shape") and hasattr(current[k], "shape") and v.shape == current[k].shape:
+            filtered[k] = v
+        else:
+            skipped += 1
+
+    module.load_state_dict(filtered, strict=False)
+    return len(filtered), skipped
+
+
+@dataclass
+class RoboflowRfDetrTrackProvider:
+    """
+    Wrapper pro RF-DETR + ByteTrack.
+    - pretrained: použije RFDETR{Small|Medium|Large}(pretrain_weights=...)
+    - tuned: vytvoří model (pretrained backbone) a pak nahraje checkpoint (partial load)
     """
 
-    def __init__(
-        self,
-        weights: str,
-        size: str | None = None,
-        conf: float = 0.35,
-        bytetrack_min_hits: int = 3,
-        bytetrack_track_thresh: float = 0.25,
-        bytetrack_match_thresh: float = 0.8,
-        bytetrack_buffer: int = 30,
-    ):
-        if sv is None or RFDETRBase is None:
-            raise ImportError(
-                "Missing dependencies for RF-DETR tracking. Install extras: "
-                "uv pip install -e '.[predict]' (needs rfdetr + supervision + torch)."
-            )
-        self.conf = float(conf)
+    size: str
+    conf: float
+    iou: float
+    bytetrack_track_thresh: float = 0.25
+    bytetrack_buffer: int = 30
+    bytetrack_match_thresh: float = 0.8
+    bytetrack_min_hits: int = 1
+    weights: Optional[str] = None
 
-        ModelCls = _pick_model_cls(size)
-        if ModelCls is None:
-            raise ImportError("rfdetr model classes not found. Check your rfdetr install/version.")
+    def __post_init__(self) -> None:
+        size = (self.size or "").lower().strip()
+        if size not in ("small", "medium", "large"):
+            raise ValueError(f"RF-DETR size must be one of: small|medium|large, got: {self.size}")
 
-        w = (weights or "").strip()
-        use_custom = bool(w) and w.lower() not in {"pretrained", "default"}
+        ModelCls = {"small": RFDETRSmall, "medium": RFDETRMedium, "large": RFDETRLarge}[size]
 
-        # 1) Create model WITHOUT loading custom weights in constructor (avoids crash on mismatch)
-        self.model = ModelCls()
+        # 1) vytvořit model
+        # - když je tuned weights, pořád je rozumné startovat z pretrained základu (stejná architektura!)
+        # - pretrain_weights necháme None -> některé verze si stáhnou defaulty podle model_name,
+        #   jiné nic. Pokud chceš jistotu, dej do models.yaml i pretrained weights pro backbone.
+        self.model = ModelCls(model_name=f"rfdetr-{size}", pretrain_weights=None)
 
-        # 2) If custom checkpoint provided, try partial load (shape-matched only)
-        if use_custom:
-            try:
-                _load_checkpoint_partial(self.model, w)
-            except Exception as e:
+        # 2) tuned checkpoint load (pokud je uveden)
+        if self.weights:
+            ckpt = _torch_load_trusted(self.weights)
+            sd = _extract_state_dict(ckpt)
+
+            torch_module = _unwrap_torch_module(self.model)
+            if torch_module is None:
+                raise RuntimeError("Could not locate underlying torch.nn.Module inside RF-DETR wrapper.")
+
+            loaded, skipped = _load_state_dict_partial(torch_module, sd)
+            if loaded == 0:
                 raise RuntimeError(
-                    "Failed to load RF-DETR tuned checkpoint. "
-                    "This usually means checkpoint is incompatible with current `rfdetr` version/config.\n"
-                    f"weights={w}\nerror={e}"
+                    "Loaded 0 keys from tuned checkpoint -> nejspíš nekompatibilní verze/architektura."
                 )
+            print(f"[RFDETR] tuned checkpoint loaded: loaded_keys={loaded}, skipped_keys={skipped}")
 
-        # Supervision ByteTrack tracker
-        self.tracker = sv.ByteTrack(
-            track_activation_threshold=float(bytetrack_track_thresh),
-            lost_track_buffer=int(bytetrack_buffer),
-            minimum_matching_threshold=float(bytetrack_match_thresh),
-            minimum_consecutive_frames=int(bytetrack_min_hits),
+        self.tracker = ByteTrack(
+            track_activation_threshold=float(self.bytetrack_track_thresh),
+            lost_track_buffer=int(self.bytetrack_buffer),
+            minimum_matching_threshold=float(self.bytetrack_match_thresh),
+            minimum_consecutive_frames=int(self.bytetrack_min_hits),
         )
 
-        # RF-DETR exposes class names
+        # names (optional)
         self._names: Optional[dict[int, str]] = None
         try:
             names = getattr(self.model, "class_names", None) or getattr(self.model, "class_names_", None)
@@ -221,6 +174,7 @@ class RoboflowRfDetrTrackProvider(TrackProvider):
             name = str(cid_i)
             if self._names and cid_i in self._names:
                 name = self._names[cid_i]
+
             out.append(
                 RawTrack(
                     track_id=int(track_id),
