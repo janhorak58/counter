@@ -237,7 +237,6 @@ def _import_rfdetr():
         ("rfdetr.model", "RFDetr"),
         ("rfdetr.model", "RFDETR"),
         ("rfdetr.core", "RFDetr"),
-        ("rfdetr.predictor", "RFDetr"),
     ]
     last_err: Exception | None = None
     for mod_name, cls_name in candidates:
@@ -249,12 +248,21 @@ def _import_rfdetr():
         except Exception as e:
             last_err = e
             continue
+
+    # Fallback: scan the package for any class name containing "detr"
     try:
         import rfdetr as _rfdetr  # type: ignore
-        available = ", ".join(sorted([k for k in dir(_rfdetr) if "Detr" in k or "DETR" in k]))
+        candidates_found = []
+        for name in dir(_rfdetr):
+            if "detr" in name.lower():
+                candidates_found.append(name)
+        for name in candidates_found:
+            cls = getattr(_rfdetr, name, None)
+            if cls is not None:
+                return cls
         raise ImportError(
             "Could not find RF-DETR class in installed `rfdetr` package. "
-            f"Checked {candidates}. Available symbols: {available or '(none)'}"
+            f"Checked {candidates}. Available symbols: {', '.join(sorted(candidates_found)) or '(none)'}"
         )
     except Exception as e:
         raise ImportError(
