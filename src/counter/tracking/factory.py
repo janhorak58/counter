@@ -72,7 +72,7 @@ def _resolve_bytetrack_yaml(
 def _infer_rfdetr_size(spec: ModelSpec) -> str:
     if spec.rfdetr_size:
         return str(spec.rfdetr_size)
-    name = (spec.model_id or "").lower()
+    name = str(getattr(spec, "model_id", "") or "").lower()
     for size in ("small", "medium", "large"):
         if size in name:
             return size
