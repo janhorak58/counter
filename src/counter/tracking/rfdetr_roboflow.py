@@ -1,187 +1,168 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 
-from counter.domain.raw_track import RawTrack
+from .providers import RawTrack, TrackProvider
 
-# RF-DETR + supervision
-from supervision import ByteTrack
-from rfdetr import RFDETRLarge, RFDETRMedium, RFDETRSmall
+from rfdetr import RFDETRBase, RFDETRLarge, RFDETRMedium, RFDETRSmall
 
-import torch
 import argparse
-
-
-def _torch_load_trusted(path: str) -> Any:
-    """
-    PyTorch 2.6: default weights_only=True může shodit legacy checkpointy.
-    Tohle záměrně používá weights_only=False (pickle) -> dělej jen pro checkpointy,
-    kterým věříš (u tebe: vlastní trénink).
-    """
-    try:
-        return torch.load(path, map_location="cpu", weights_only=False)
-    except TypeError:
-        # starší torch nemá weights_only
-        return torch.load(path, map_location="cpu")
-
-
-def _extract_state_dict(ckpt: Any) -> Dict[str, torch.Tensor]:
-    # nejčastější formáty
-    if isinstance(ckpt, dict):
-        for k in ("model", "state_dict", "model_state_dict", "net", "module"):
-            v = ckpt.get(k)
-            if isinstance(v, dict):
-                return v
-        # občas je state_dict přímo dict v rootu
-        if all(isinstance(x, torch.Tensor) for x in ckpt.values()):
-            return ckpt  # type: ignore
-    if isinstance(ckpt, dict):
-        return ckpt  # fallback
-    raise RuntimeError("Checkpoint does not look like a state_dict container.")
-
-
-def _unwrap_torch_module(obj: Any, max_depth: int = 5) -> Optional[torch.nn.Module]:
-    """
-    rfdetr wrapper někdy drží torch model v různých atributech.
-    """
-    if isinstance(obj, torch.nn.Module):
-        return obj
-    if max_depth <= 0 or obj is None:
-        return None
-
-    # zkus typické atributy
-    for attr in ("model", "net", "module", "_model", "torch_model", "detr"):
-        if hasattr(obj, attr):
-            m = getattr(obj, attr)
-            out = _unwrap_torch_module(m, max_depth - 1)
-            if out is not None:
-                return out
-
-    return None
-
-
-def _load_state_dict_partial(module: torch.nn.Module, sd: Dict[str, torch.Tensor]) -> Tuple[int, int]:
-    """
-    Nahraje jen kompatibilní klíče (stejný tvar tensoru).
-    Vrací (loaded_keys, skipped_keys).
-    """
-    current = module.state_dict()
-    filtered: Dict[str, torch.Tensor] = {}
-    skipped = 0
-
-    for k, v in sd.items():
-        if k in current and hasattr(v, "shape") and hasattr(current[k], "shape") and v.shape == current[k].shape:
-            filtered[k] = v
-        else:
-            skipped += 1
-
-    module.load_state_dict(filtered, strict=False)
-    return len(filtered), skipped
+import inspect
+import torch
 
 
 @dataclass
-class RoboflowRfDetrTrackProvider:
-    """
-    Wrapper pro RF-DETR + ByteTrack.
-    - pretrained: použije RFDETR{Small|Medium|Large}(pretrain_weights=...)
-    - tuned: vytvoří model (pretrained backbone) a pak nahraje checkpoint (partial load)
-    """
-
-    size: str
+class RFDETRDetection:
+    bbox_xyxy: Tuple[int, int, int, int]
     conf: float
-    iou: float
-    bytetrack_track_thresh: float = 0.25
-    bytetrack_buffer: int = 30
-    bytetrack_match_thresh: float = 0.8
-    bytetrack_min_hits: int = 1
-    weights: Optional[str] = None
+    class_id: int
 
-    def __post_init__(self) -> None:
-        size = (self.size or "").lower().strip()
-        if size not in ("small", "medium", "large"):
-            raise ValueError(f"RF-DETR size must be one of: small|medium|large, got: {self.size}")
 
-        ModelCls = {"small": RFDETRSmall, "medium": RFDETRMedium, "large": RFDETRLarge}[size]
+def _get_torch_module(obj) -> Optional[torch.nn.Module]:
+    if isinstance(obj, torch.nn.Module):
+        return obj
+    for attr in ("model", "_model", "net", "module"):
+        if hasattr(obj, attr):
+            cand = getattr(obj, attr)
+            if isinstance(cand, torch.nn.Module):
+                return cand
+    for attr in ("model", "_model", "net", "module"):
+        if hasattr(obj, attr):
+            mod = _get_torch_module(getattr(obj, attr))
+            if mod is not None:
+                return mod
+    return None
 
-        # 1) vytvořit model
-        # - když je tuned weights, pořád je rozumné startovat z pretrained základu (stejná architektura!)
-        # - pretrain_weights necháme None -> některé verze si stáhnou defaulty podle model_name,
-        #   jiné nic. Pokud chceš jistotu, dej do models.yaml i pretrained weights pro backbone.
-        self.model = ModelCls(model_name=f"rfdetr-{size}", pretrain_weights=None)
 
-        # 2) tuned checkpoint load (pokud je uveden)
-        if self.weights:
-            ckpt = _torch_load_trusted(self.weights)
-            sd = _extract_state_dict(ckpt)
+def _torch_load_any(weights_path: str):
+    """
+    Security note:
+      weights_only=False can execute code embedded in the file.
+      Only do this for checkpoints you produced / trust.
+    """
+    p = Path(weights_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {p}")
 
-            torch_module = _unwrap_torch_module(self.model)
-            if torch_module is None:
-                raise RuntimeError("Could not locate underlying torch.nn.Module inside RF-DETR wrapper.")
+    try:
+        torch.serialization.add_safe_globals([argparse.Namespace])
+    except Exception:
+        pass
 
-            loaded, skipped = _load_state_dict_partial(torch_module, sd)
-            if loaded == 0:
-                raise RuntimeError(
-                    "Loaded 0 keys from tuned checkpoint -> nejspíš nekompatibilní verze/architektura."
-                )
-            print(f"[RFDETR] tuned checkpoint loaded: loaded_keys={loaded}, skipped_keys={skipped}")
-
-        self.tracker = ByteTrack(
-            track_activation_threshold=float(self.bytetrack_track_thresh),
-            lost_track_buffer=int(self.bytetrack_buffer),
-            minimum_matching_threshold=float(self.bytetrack_match_thresh),
-            minimum_consecutive_frames=int(self.bytetrack_min_hits),
-        )
-
-        # names (optional)
-        self._names: Optional[dict[int, str]] = None
+    sig = inspect.signature(torch.load)
+    if "weights_only" in sig.parameters:
         try:
-            names = getattr(self.model, "class_names", None) or getattr(self.model, "class_names_", None)
-            if isinstance(names, (list, tuple)):
-                self._names = {i: str(n) for i, n in enumerate(names)}
-            elif isinstance(names, dict):
-                self._names = {int(k): str(v) for k, v in names.items()}
+            return torch.load(str(p), map_location="cpu", weights_only=True)
         except Exception:
-            self._names = None
+            return torch.load(str(p), map_location="cpu", weights_only=False)
+
+    return torch.load(str(p), map_location="cpu")
+
+
+def _extract_state_dict(ckpt):
+    if isinstance(ckpt, dict):
+        for k in ("model", "state_dict", "model_state_dict", "net", "weights"):
+            if k in ckpt and isinstance(ckpt[k], dict):
+                return ckpt[k]
+        if all(isinstance(v, torch.Tensor) for v in ckpt.values()):
+            return ckpt
+    raise ValueError("Unsupported checkpoint format (expected dict-like).")
+
+
+def _filter_compatible_keys(model_sd: dict, ckpt_sd: dict) -> dict:
+    filtered = {}
+    for k, v in ckpt_sd.items():
+        if k not in model_sd:
+            continue
+        if not isinstance(v, torch.Tensor):
+            continue
+        if model_sd[k].shape != v.shape:
+            continue
+        if "position_embeddings" in k:
+            continue
+        filtered[k] = v
+    return filtered
+
+
+def _load_checkpoint_partial(wrapper_model, weights_path: str) -> Tuple[int, int]:
+    torch_model = _get_torch_module(wrapper_model)
+    if torch_model is None:
+        raise RuntimeError("Cannot find underlying torch.nn.Module on RF-DETR wrapper (no .model/.net).")
+
+    ckpt = _torch_load_any(weights_path)
+    sd = _extract_state_dict(ckpt)
+
+    if any(k.startswith("module.") for k in sd.keys()):
+        sd = {k[len("module."):]: v for k, v in sd.items()}
+
+    model_sd = torch_model.state_dict()
+    filtered = _filter_compatible_keys(model_sd, sd)
+
+    torch_model.load_state_dict(filtered, strict=False)
+    return len(filtered), len(sd)
+
+
+class RoboflowRfDetrTrackProvider(TrackProvider):
+    def __init__(self, model_size: str, weights: Optional[str], conf: float = 0.5):
+        model_size = (model_size or "medium").lower()
+        ModelCls = {"small": RFDETRSmall, "medium": RFDETRMedium, "large": RFDETRLarge}.get(model_size, RFDETRMedium)
+
+        self.conf = float(conf)
+        self._next_id = 1
+        self._latest_preview_jpg: Optional[str] = None
+        self._backend = "rfdetr"
+        self._variant = "tuned" if bool(weights) else "pretrained"
+
+        # Instantiate WITHOUT passing checkpoint to constructor
+        self.model: RFDETRBase = ModelCls(pretrain_weights=None)
+
+        if weights:
+            loaded, total = _load_checkpoint_partial(self.model, weights)
+            print(f"[RFDETR] loaded checkpoint keys: {loaded}/{total} from {weights}")
+
+        # put underlying torch module to eval
+        if hasattr(self.model, "model"):
+            self.model.model.eval()
+        else:
+            self.model.eval()
+
+    @property
+    def backend(self) -> str:
+        return self._backend
+
+    @property
+    def variant(self) -> str:
+        return self._variant
+
+    @property
+    def latest_preview_jpg(self) -> Optional[str]:
+        return self._latest_preview_jpg
+
+    def set_preview(self, jpg_b64: str) -> None:
+        self._latest_preview_jpg = jpg_b64
+
+    def reset(self) -> None:
+        self._next_id = 1
+        self._latest_preview_jpg = None
 
     def update(self, frame_bgr: np.ndarray) -> List[RawTrack]:
-        frame_rgb = frame_bgr[:, :, ::-1].copy()
-        detections = self.model.predict(frame_rgb, threshold=self.conf)
+        frame_rgb = frame_bgr[:, :, ::-1]
+        dets = self.model.infer(frame_rgb, confidence=self.conf)
 
-        if not hasattr(detections, "xyxy"):
-            return []
-
-        tracked = self.tracker.update_with_detections(detections)
-        if getattr(tracked, "tracker_id", None) is None:
-            return []
-
-        out: List[RawTrack] = []
-
-        xyxy = tracked.xyxy
-        class_id = getattr(tracked, "class_id", None)
-        conf = getattr(tracked, "confidence", None)
-        tid = tracked.tracker_id
-
-        if class_id is None:
-            class_id = np.zeros((len(xyxy),), dtype=int)
-        if conf is None:
-            conf = np.ones((len(xyxy),), dtype=float)
-
-        for box, cid, sc, track_id in zip(xyxy, class_id, conf, tid):
-            cid_i = int(cid) if cid is not None else -1
-            name = str(cid_i)
-            if self._names and cid_i in self._names:
-                name = self._names[cid_i]
-
-            out.append(
+        tracks: List[RawTrack] = []
+        for x1, y1, x2, y2, conf, cls in dets.xyxy:
+            tracks.append(
                 RawTrack(
-                    track_id=int(track_id),
-                    bbox=(float(box[0]), float(box[1]), float(box[2]), float(box[3])),
-                    score=float(sc),
-                    raw_class_id=cid_i,
-                    raw_class_name=name,
+                    track_id=self._next_id,
+                    class_id=int(cls),
+                    conf=float(conf),
+                    bbox_xyxy=(int(x1), int(y1), int(x2), int(y2)),
                 )
             )
-        return out
+            self._next_id += 1
+
+        return tracks
