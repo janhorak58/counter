@@ -31,7 +31,6 @@ class TrackCounter:
             line=self.line,
             line_base_resolution=self.line_base_resolution,
             greyzone_px=self.greyzone_px,
-            log=self.log,
         )
         self.raw_in_counts: Dict[int, int] = {}
         self.raw_out_counts: Dict[int, int] = {}
