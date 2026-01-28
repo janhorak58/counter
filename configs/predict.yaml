@@ -1,9 +1,9 @@
 ﻿# Prediction configuration
-run_id: "local_predict"
-# model_id: "rfdetr_tuned/rfdetr_small_v6"
+run_id: "tuned_rfdetr_small"
+model_id: "rfdetr_tuned/rfdetr_small_v6"
 # model_id: "yolo_tuned/yolo8n_v2"
 # model_id: "yolo_pretrained/yolov8m"
-model_id: "rfdetr_pretrained/small"
+#model_id: "rfdetr_pretrained/small"
 output_dir: "runs/predict"
 device: "cpu"
 
@@ -25,11 +25,10 @@ probe_frames: 0
 
 export:
   save_video: true
-  out_video_resolution: [1280, 720]  # width, height
   save_raw: true
   save_counts_json: true
 
-debug: true
+debug: false
 
 preview:
   enabled: false
@@ -42,3 +41,5 @@ line:
   default_resolution: [1920, 1080]  # width, height
 
 greyzone_px: 30
+
+
