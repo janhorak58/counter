@@ -28,11 +28,30 @@ def _discover_videos(videos_dir: Path) -> List[str]:
 
 
 def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
-    """Open OpenCV video writer for the requested path."""
+    """Open OpenCV video writer for the requested path.
+
+    Tries a small set of codec/container combinations to improve Linux support.
+    Returns (writer, actual_path, codec_tag).
+    """
     if cv2 is None:
         raise ImportError("OpenCV (cv2) is required for save_video=True")
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    return cv2.VideoWriter(str(path), fourcc, float(fps), size)
+    # Prefer MP4, but fall back to AVI codecs that are commonly available on Linux builds.
+    candidates = [
+        ("mp4v", ".mp4"),
+        ("avc1", ".mp4"),
+        ("XVID", ".avi"),
+        ("MJPG", ".avi"),
+    ]
+    errors = []
+    for tag, ext in candidates:
+        out_path = path if path.suffix.lower() == ext else path.with_suffix(ext)
+        fourcc = cv2.VideoWriter_fourcc(*tag)
+        writer = cv2.VideoWriter(str(out_path), fourcc, float(fps), size)
+        if writer.isOpened():
+            return writer, out_path, tag
+        errors.append(f"{tag}{ext}")
+        writer.release()
+    raise RuntimeError(f"OpenCV VideoWriter failed for: {', '.join(errors)}")
 
 
 def _scale_line(coords, src_w: int, src_h: int, dst_w: int, dst_h: int):
@@ -106,9 +125,11 @@ class PredictVideos:
             writer = None
             out_video_path: Optional[Path] = None
             if cfg.save_video:
-                out_video_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
-                print("Saving video to:", out_video_path)
-                writer = _open_writer(out_video_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height))
+                desired_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
+                writer, out_video_path, codec_tag = _open_writer(
+                    desired_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height)
+                )
+                print(f"Saving video to: {out_video_path} (codec={codec_tag})")
 
             log(
                 "video_start",
