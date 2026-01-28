@@ -36,6 +36,7 @@ class BuildComponents:
             greyzone_px=float(cfg.greyzone_px),
             finalize_fn=mapper.finalize_counts,
             line_base_resolution=tuple(cfg.line.default_resolution),
+            log=log,
         )
 
         renderer = FrameRenderer(

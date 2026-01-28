@@ -25,12 +25,13 @@ class TrackCounter:
     greyzone_px: float = 0.0
     oscillation_window_frames: int = 0
     line_base_resolution: Tuple[int, int] = (1920, 1080)
-
+    log : Callable[..., None] = lambda *a, **k: None
     def __post_init__(self) -> None:
         self.net = NetStateCounter(
             line=self.line,
             line_base_resolution=self.line_base_resolution,
             greyzone_px=self.greyzone_px,
+            log=self.log,
         )
         self.raw_in_counts: Dict[int, int] = {}
         self.raw_out_counts: Dict[int, int] = {}
@@ -38,6 +39,7 @@ class TrackCounter:
         self._last_counted: Dict[int, Tuple[int, str, int]] = {}
         self.video_resolution: Tuple[int, int] = (1920, 1080)
         self._canon_ids: List[int] = [int(c.value) for c in CanonicalClass]
+
 
     def reset(self, video_resolution: Tuple[int, int]) -> None:
         """Reset internal counters for a new video."""
@@ -85,8 +87,10 @@ class TrackCounter:
             cid = int(voted) if voted is not None else int(tr.mapped_class_id)
 
             if ev == "in":
+                self.log("Line crossed IN", {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx})
                 self.raw_in_counts[cid] = int(self.raw_in_counts.get(cid, 0) + 1)
             elif ev == "out":
+                self.log("Line crossed IN", {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx})
                 self.raw_out_counts[cid] = int(self.raw_out_counts.get(cid, 0) + 1)
 
             self._last_counted[tid] = (self._frame_idx, str(ev), cid)

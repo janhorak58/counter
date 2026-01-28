@@ -81,7 +81,7 @@ class NetStateCounter:
         st = self.states.setdefault(int(track.track_id), TrackState())
         st.vote_class(int(class_id))
 
-        side = classify_point(self.line, xy, video_resolution, self.line_base_resolution)
+        side = classify_point(self.line, xy, video_resolution, self.line_base_resolution, self.greyzone_px)
 
         prev_net = st.net_state
         new_net = _net_transition(prev_net, side)
