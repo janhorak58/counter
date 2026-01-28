@@ -49,7 +49,6 @@ class ExportCfg(BaseModel):
     """Output export settings for prediction."""
 
     save_video: bool = True
-    out_video_resolution: Optional[Tuple[int, int]] = None  # (width, height)
     save_raw: bool = True
     save_counts_json: bool = True
     out_dir: str = "runs/predict/export"
@@ -85,7 +84,6 @@ class PredictConfig(BaseModel):
     greyzone_px: float = 0.0
     preview: PreviewCfg = Field(default_factory=PreviewCfg)
     save_video: bool = True
-    out_video_resolution: Optional[Tuple[int, int]] = None  # (width, height)
 
 
 class ChartsCfg(BaseModel):
