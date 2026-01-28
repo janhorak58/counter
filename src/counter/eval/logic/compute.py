@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -7,7 +7,6 @@ from counter.core.schema import EvalConfig
 from counter.core.io.counts import load_counts_json
 from counter.core.io import get_video_info
 from counter.eval.logic.charts import bar_counts
-
 from counter.eval.logic.metrics import (
     agg_metrics,
     class_wape_macro,
@@ -20,8 +19,6 @@ from counter.eval.logic.metrics import (
 )
 
 
-
-
 def evaluate_one_run(
     *,
     cfg: EvalConfig,
@@ -32,12 +29,9 @@ def evaluate_one_run(
     charts_dir: Path,
     log=None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Compute:
-    - per_run_row
-    - per_video_rows
-    - per_class_rows
+    """Compute per-run, per-video, and per-class evaluation rows.
 
-    `run` expected to have fields: run_id, model_id, backend, variant, predict_dir
+    `run` is expected to have fields: run_id, model_id, backend, variant, predict_dir.
     """
 
     if log:
@@ -46,33 +40,32 @@ def evaluate_one_run(
             {"run_id": run.run_id, "model_id": run.model_id, "backend": run.backend, "variant": run.variant},
         )
 
-    # per-run diffs (video-weighted)
+    # Per-run diffs (video-weighted).
     diffs_in_cls: List[float] = []
     diffs_out_cls: List[float] = []
 
-    # OLD: signed total-count diffs (can hide class swaps)
+    # Signed total-count diffs (can hide class swaps; kept for comparison).
     diffs_in_total_counts: List[float] = []
     diffs_out_total_counts: List[float] = []
 
-    # class-aware "total" per video = L1 across classes
+    # Class-aware "total" per video = L1 across classes.
     abs_err_in_total_ca_list: List[float] = []
     abs_err_out_total_ca_list: List[float] = []
-
 
     diffs_in_by_class: Dict[int, List[float]] = {cid: [] for cid in classes}
     diffs_out_by_class: Dict[int, List[float]] = {cid: [] for cid in classes}
 
-     # per-run sums (event-weighted)
+    # Per-run sums (event-weighted).
     sum_gt_in_total = 0
     sum_gt_out_total = 0
     sum_pred_in_total = 0
     sum_pred_out_total = 0
 
-    # NEW: class-aware L1 totals (sum over videos of sum_c |p-g|)
+    # Class-aware L1 totals (sum over videos of sum_c |p-g|).
     sum_abs_err_in_total = 0.0
     sum_abs_err_out_total = 0.0
 
-    # OLD: total-count abs error (|sum_c p - sum_c g|), keep for comparison
+    # Total-count abs error (|sum_c p - sum_c g|), kept for comparison.
     sum_abs_err_in_total_counts = 0.0
     sum_abs_err_out_total_counts = 0.0
 
@@ -81,7 +74,7 @@ def evaluate_one_run(
     sum_abs_err_in_cls: Dict[int, float] = {cid: 0.0 for cid in classes}
     sum_abs_err_out_cls: Dict[int, float] = {cid: 0.0 for cid in classes}
 
-    # duration (rate-based)
+    # Duration sum (rate-based metrics).
     sum_duration_s = 0.0
 
     per_video_rows: List[Dict[str, Any]] = []
@@ -125,31 +118,31 @@ def evaluate_one_run(
         pred_out_total = int(sum(pred_out_vec))
         gt_out_total = int(sum(gt_out_vec))
 
-        # OLD signed totals (keep for bias/debug)
+        # Signed totals (useful for bias/debug).
         d_in_total_counts = float(pred_in_total - gt_in_total)
         d_out_total_counts = float(pred_out_total - gt_out_total)
         diffs_in_total_counts.append(d_in_total_counts)
         diffs_out_total_counts.append(d_out_total_counts)
 
-        # NEW class-aware total error per video (L1 across classes)
+        # Class-aware total error per video (L1 across classes).
         abs_err_in_total_ca = float(sum(abs(int(p) - int(g)) for p, g in zip(pred_in_vec, gt_in_vec)))
         abs_err_out_total_ca = float(sum(abs(int(p) - int(g)) for p, g in zip(pred_out_vec, gt_out_vec)))
         abs_err_in_total_ca_list.append(abs_err_in_total_ca)
         abs_err_out_total_ca_list.append(abs_err_out_total_ca)
 
-        # sums for event-weighted metrics
+        # Sums for event-weighted metrics.
         sum_gt_in_total += gt_in_total
         sum_gt_out_total += gt_out_total
         sum_pred_in_total += pred_in_total
         sum_pred_out_total += pred_out_total
-        # NEW: class-aware L1 totals
         sum_abs_err_in_total += abs_err_in_total_ca
         sum_abs_err_out_total += abs_err_out_total_ca
 
-        # OLD: total-count abs error (can hide class swaps)
+        # Total-count abs error (can hide class swaps).
         sum_abs_err_in_total_counts += abs(d_in_total_counts)
         sum_abs_err_out_total_counts += abs(d_out_total_counts)
-        # per-class sums for class-aware metric
+
+        # Per-class sums for class-aware metrics.
         for cid, pi, gi in zip(classes, pred_in_vec, gt_in_vec):
             sum_gt_in_cls[cid] += int(gi)
             sum_abs_err_in_cls[cid] += float(abs(int(pi) - int(gi)))
@@ -157,7 +150,7 @@ def evaluate_one_run(
             sum_gt_out_cls[cid] += int(go)
             sum_abs_err_out_cls[cid] += float(abs(int(po) - int(go)))
 
-        # duration (optional)
+        # Duration (optional).
         duration_s: Optional[float] = duration_s_from_pred_meta(pred_obj)
         if duration_s is None and getattr(cfg, "videos_dir", None):
             try:
@@ -189,16 +182,10 @@ def evaluate_one_run(
             "pred_in_total": pred_in_total,
             "gt_out_total": gt_out_total,
             "pred_out_total": pred_out_total,
-
-            # class-aware L1 total error (what your heatmap should show)
             "abs_err_in_total": abs_err_in_total_ca,
             "abs_err_out_total": abs_err_out_total_ca,
-
-            # signed totals (still useful for bias)
             "err_in_total": d_in_total_counts,
             "err_out_total": d_out_total_counts,
-
-            # OPTIONAL: keep old absolute totals for comparison/debug
             "abs_err_in_total_counts": abs(d_in_total_counts),
             "abs_err_out_total_counts": abs(d_out_total_counts),
         }
@@ -227,7 +214,7 @@ def evaluate_one_run(
             import re
 
             def _slug(s: str) -> str:
-                # safe folder name for Windows + paths
+                # Safe folder name for Windows paths.
                 return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(s)).strip("_")
 
             vid_stem = Path(video).stem
@@ -243,52 +230,50 @@ def evaluate_one_run(
                     pred=pr_vec,
                     labels=class_names,
                 )
-    # OLD (counts-total, not class-aware)
+
+    # Total-count (not class-aware).
     m_run_in_total_counts = agg_metrics(diffs_in_total_counts)
     m_run_out_total_counts = agg_metrics(diffs_out_total_counts)
 
-    # NEW (class-aware): MAE over per-video L1 errors
+    # Class-aware: MAE over per-video L1 errors.
     mae_in_total = safe_div(sum(abs_err_in_total_ca_list), float(len(abs_err_in_total_ca_list)))
     mae_out_total = safe_div(sum(abs_err_out_total_ca_list), float(len(abs_err_out_total_ca_list)))
 
-    # optional RMSE over per-video L1 errors
-    rmse_in_total = (safe_div(sum((x * x) for x in abs_err_in_total_ca_list), float(len(abs_err_in_total_ca_list))) ** 0.5) if abs_err_in_total_ca_list else 0.0
-    rmse_out_total = (safe_div(sum((x * x) for x in abs_err_out_total_ca_list), float(len(abs_err_out_total_ca_list))) ** 0.5) if abs_err_out_total_ca_list else 0.0
+    # Optional RMSE over per-video L1 errors.
+    rmse_in_total = (
+        safe_div(sum((x * x) for x in abs_err_in_total_ca_list), float(len(abs_err_in_total_ca_list))) ** 0.5
+    ) if abs_err_in_total_ca_list else 0.0
+    rmse_out_total = (
+        safe_div(sum((x * x) for x in abs_err_out_total_ca_list), float(len(abs_err_out_total_ca_list))) ** 0.5
+    ) if abs_err_out_total_ca_list else 0.0
 
     score_total_video_mae = float((mae_in_total + mae_out_total) / 2.0)
-    # per-run: event-weighted (WAPE) - OLD (total counts, can hide class swaps)
 
-    # OLD: total-count WAPE (|sum p - sum g| / sum GT) - can hide class swaps
+    # Event-weighted WAPE (total counts, can hide class swaps).
     wape_in_totalcounts = safe_div(sum_abs_err_in_total_counts, float(sum_gt_in_total))
     wape_out_totalcounts = safe_div(sum_abs_err_out_total_counts, float(sum_gt_out_total))
 
-    # NEW: class-aware "L1 total" WAPE (sum_c |p-g| / sum GT)  [same as micro if weights are GT]
+    # Class-aware "L1 total" WAPE (sum_c |p-g| / sum GT).
     wape_in_total_l1 = safe_div(sum_abs_err_in_total, float(sum_gt_in_total))
     wape_out_total_l1 = safe_div(sum_abs_err_out_total, float(sum_gt_out_total))
 
-    # NEW: class-aware micro WAPE (explicit)
+    # Class-aware micro WAPE.
     wape_micro_in = class_wape_micro(sum_abs_err_in_cls, sum_gt_in_cls)
     wape_micro_out = class_wape_micro(sum_abs_err_out_cls, sum_gt_out_cls)
 
-    # NEW: weighted-macro with weights w_c = sum_gt[c] (algebraically equals micro)
+    # Weighted-macro with weights w_c = sum_gt[c] (equals micro).
     wape_wmacro_gt_in = class_wape_weighted_macro_gt(sum_abs_err_in_cls, sum_gt_in_cls)
     wape_wmacro_gt_out = class_wape_weighted_macro_gt(sum_abs_err_out_cls, sum_gt_out_cls)
 
-    # your headline score (direction-macro)
+    # Headline score (direction-macro).
     score_total_event_wape = float((wape_micro_in + wape_micro_out) / 2.0)
-    # per-run: class-aware (macro WAPE by class)
+
+    # Per-run: class-aware macro WAPE by class.
     class_wape_macro_in = class_wape_macro(sum_abs_err_in_cls, sum_gt_in_cls)
     class_wape_macro_out = class_wape_macro(sum_abs_err_out_cls, sum_gt_out_cls)
     score_total_class_wape = float((class_wape_macro_in + class_wape_macro_out) / 2.0)
 
-    wape_micro_in = class_wape_micro(sum_abs_err_in_cls, sum_gt_in_cls)
-    wape_micro_out = class_wape_micro(sum_abs_err_out_cls, sum_gt_out_cls)
-
-    wape_wmacro_gt_in = class_wape_weighted_macro_gt(sum_abs_err_in_cls, sum_gt_in_cls)
-    wape_wmacro_gt_out = class_wape_weighted_macro_gt(sum_abs_err_out_cls, sum_gt_out_cls)
-
-
-    # per-run: rate-based
+    # Per-run: rate-based.
     if sum_duration_s > 0.0:
         hours = float(sum_duration_s) / 3600.0
         gt_in_rate = safe_div(float(sum_gt_in_total), hours)
@@ -308,16 +293,12 @@ def evaluate_one_run(
         "model_id": run.model_id,
         "backend": run.backend,
         "variant": run.variant,
-        # class-aware totals (L1 per video)
         "mae_in_total": float(mae_in_total),
         "rmse_in_total": float(rmse_in_total),
-        "bias_in_total": "",   # bias pro L1 "total" nedává smysl
-
+        "bias_in_total": "",  # Bias doesn't apply to L1 totals.
         "mae_out_total": float(mae_out_total),
         "rmse_out_total": float(rmse_out_total),
         "bias_out_total": "",
-
-        # keep old signed-total metrics for reference
         "mae_in_total_counts": m_run_in_total_counts["mae"],
         "rmse_in_total_counts": m_run_in_total_counts["rmse"],
         "bias_in_total_counts": m_run_in_total_counts["bias"],
@@ -331,21 +312,15 @@ def evaluate_one_run(
         "sum_pred_out_total": sum_pred_out_total,
         "sum_abs_err_in_total": float(sum_abs_err_in_total),
         "sum_abs_err_out_total": float(sum_abs_err_out_total),
-        # WAPE variants
         "wape_in_totalcounts": float(wape_in_totalcounts),
         "wape_out_totalcounts": float(wape_out_totalcounts),
-
         "wape_in_total_l1": float(wape_in_total_l1),
         "wape_out_total_l1": float(wape_out_total_l1),
-
         "wape_micro_in": float(wape_micro_in),
         "wape_micro_out": float(wape_micro_out),
-
         "wape_wmacro_gt_in": float(wape_wmacro_gt_in),
         "wape_wmacro_gt_out": float(wape_wmacro_gt_out),
-
         "score_total_event_wape": score_total_event_wape,
-       
         "class_wape_macro_in": float(class_wape_macro_in),
         "class_wape_macro_out": float(class_wape_macro_out),
         "score_total_class_wape": float(score_total_class_wape),
@@ -363,13 +338,29 @@ def evaluate_one_run(
     for cid, cname in zip(classes, class_names):
         m = agg_metrics(diffs_in_by_class[cid])
         per_class_rows.append(
-            {"run_id": run.run_id, "model_id": run.model_id, "backend": run.backend, "variant": run.variant,
-             "direction": "IN", "class_id": cid, "class_name": cname, **m}
+            {
+                "run_id": run.run_id,
+                "model_id": run.model_id,
+                "backend": run.backend,
+                "variant": run.variant,
+                "direction": "IN",
+                "class_id": cid,
+                "class_name": cname,
+                **m,
+            }
         )
         m = agg_metrics(diffs_out_by_class[cid])
         per_class_rows.append(
-            {"run_id": run.run_id, "model_id": run.model_id, "backend": run.backend, "variant": run.variant,
-             "direction": "OUT", "class_id": cid, "class_name": cname, **m}
+            {
+                "run_id": run.run_id,
+                "model_id": run.model_id,
+                "backend": run.backend,
+                "variant": run.variant,
+                "direction": "OUT",
+                "class_id": cid,
+                "class_name": cname,
+                **m,
+            }
         )
 
     if log:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from counter.core.schema import EvalConfig  # :contentReference[oaicite:1]{index=1}
+from counter.core.schema import EvalConfig
 from counter.core.pipeline.base import PipelineRunner, StageContext
 from counter.core.pipeline.log import JsonlLogger
 
@@ -15,7 +15,9 @@ from counter.eval.stages.export_rank_charts import RankExportCharts
 
 
 class EvalPipeline:
+    """Orchestrate the evaluation pipeline stages."""
     def run(self, cfg: EvalConfig, predict_run_dir: str | Path | None = None) -> Path:
+        """Run evaluation and return the output root directory."""
         runner = PipelineRunner(
             stages=[
                 LoadGTCounts(),

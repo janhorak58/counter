@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Tuple
@@ -12,11 +12,14 @@ FinalizeFn = Callable[[Dict[int, int], Dict[int, int]], Tuple[Dict[int, int], Di
 
 
 def _fill_missing(counts: Dict[int, int], keys: Iterable[int]) -> Dict[int, int]:
+    """Ensure all canonical class IDs exist in a counts dict."""
     return {int(k): int(counts.get(int(k), 0)) for k in keys}
 
 
 @dataclass
 class TrackCounter:
+    """Count in/out events for tracked objects crossing a line."""
+
     line: LineCoords
     finalize_fn: FinalizeFn
     greyzone_px: float = 0.0
@@ -24,7 +27,11 @@ class TrackCounter:
     line_base_resolution: Tuple[int, int] = (1920, 1080)
 
     def __post_init__(self) -> None:
-        self.net = NetStateCounter(line=self.line, line_base_resolution=self.line_base_resolution, greyzone_px=self.greyzone_px)
+        self.net = NetStateCounter(
+            line=self.line,
+            line_base_resolution=self.line_base_resolution,
+            greyzone_px=self.greyzone_px,
+        )
         self.raw_in_counts: Dict[int, int] = {}
         self.raw_out_counts: Dict[int, int] = {}
         self._frame_idx: int = 0
@@ -33,6 +40,7 @@ class TrackCounter:
         self._canon_ids: List[int] = [int(c.value) for c in CanonicalClass]
 
     def reset(self, video_resolution: Tuple[int, int]) -> None:
+        """Reset internal counters for a new video."""
         self.net.reset()
         self.raw_in_counts = {}
         self.raw_out_counts = {}
@@ -41,6 +49,7 @@ class TrackCounter:
         self.video_resolution = video_resolution
 
     def update(self, tracks: List[MappedTrack]) -> None:
+        """Update counters with a batch of tracks from the current frame."""
         self._frame_idx += 1
 
         for tr in tracks:
@@ -60,9 +69,15 @@ class TrackCounter:
 
                     self._last_counted.pop(tid, None)
                     continue
-            # 2) BĚŽNÉ ZAPOČTENÍ EVENTU
+
+            # Count regular crossing events.
             xy = bottom_center(tr.bbox)
-            ev = self.net.update(track=tr, xy=xy, class_id=tr.mapped_class_id, video_resolution=self.video_resolution) 
+            ev = self.net.update(
+                track=tr,
+                xy=xy,
+                class_id=tr.mapped_class_id,
+                video_resolution=self.video_resolution,
+            )
             if not ev:
                 continue
 
@@ -76,11 +91,11 @@ class TrackCounter:
 
             self._last_counted[tid] = (self._frame_idx, str(ev), cid)
 
-
     def snapshot_counts(self) -> Tuple[Dict[int, int], Dict[int, int]]:
+        """Return current counts with missing classes filled in."""
         fin_in, fin_out = self.finalize_fn(dict(self.raw_in_counts), dict(self.raw_out_counts))
         return _fill_missing(fin_in, self._canon_ids), _fill_missing(fin_out, self._canon_ids)
 
     def finalize(self) -> Tuple[Dict[int, int], Dict[int, int]]:
+        """Finalize and return counts (alias for snapshot_counts)."""
         return self.snapshot_counts()
-    

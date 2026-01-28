@@ -7,6 +7,7 @@ from counter.eval.logic.compute import evaluate_one_run
 
 
 class EvaluateRuns:
+    """Stage that evaluates all discovered runs."""
     name = "EvaluateRuns"
 
     def run(self, ctx: StageContext) -> None:

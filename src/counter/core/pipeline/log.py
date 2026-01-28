@@ -8,11 +8,13 @@ from typing import Any, Dict
 
 
 def _now_iso() -> str:
+    """Return current UTC time as an ISO string."""
     return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
 class JsonlLogger:
+    """Append structured events to a JSONL file and stdout."""
     path: Path
 
     def __call__(self, event: str, payload: Dict[str, Any]) -> None:

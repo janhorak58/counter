@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Pydantic schema definitions for prediction, evaluation, and model registry."""
 
@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class LineCfg(BaseModel):
     """Counting line definition in pixel coordinates."""
+
     name: str = "Line_1"
     coords: List[int] = Field(
         default_factory=lambda: [846, 404, 1328, 456],
@@ -22,18 +23,21 @@ class LineCfg(BaseModel):
 
 
 class ThresholdsCfg(BaseModel):
+    """Score and IoU thresholds for detection filtering."""
+
     conf: float = 0.35
     iou: float = 0.5
 
 
 class TrackingCfg(BaseModel):
-    # dovol vypnout tracking úplně
+    """Tracking configuration for prediction."""
+
     type: Literal["none", "bytetrack"] = "bytetrack"
 
-    # pro YOLO ultralytics (yaml konfigurace trackeru)
+    # Ultralytics YOLO tracker configuration file (YAML).
     tracker_yaml: Optional[str] = None
 
-    # pro supervision bytetrack (a obecně parametry trackeru)
+    # Supervision ByteTrack parameters (and general tracker params).
     params: Dict[str, Any] = Field(default_factory=dict)
 
     @property
@@ -42,20 +46,26 @@ class TrackingCfg(BaseModel):
 
 
 class ExportCfg(BaseModel):
+    """Output export settings for prediction."""
+
     save_video: bool = True
+    out_video_resolution: Optional[Tuple[int, int]] = None  # (width, height)
     save_raw: bool = True
     save_counts_json: bool = True
     out_dir: str = "runs/predict/export"
 
 
-
-
 class PreviewCfg(BaseModel):
+    """Preview rendering settings for quick inspection."""
+
     enabled: bool = False
     every_n_frames: int = 1
     max_width: int = 800
 
+
 class PredictConfig(BaseModel):
+    """Prediction configuration loaded from YAML."""
+
     run_id: str = "local_predict"
     model_id: str
     output_dir: str = "runs/predict"
@@ -75,15 +85,19 @@ class PredictConfig(BaseModel):
     greyzone_px: float = 0.0
     preview: PreviewCfg = Field(default_factory=PreviewCfg)
     save_video: bool = True
+    out_video_resolution: Optional[Tuple[int, int]] = None  # (width, height)
+
 
 class ChartsCfg(BaseModel):
     """Optional chart generation settings for evaluation."""
+
     enabled: bool = True
 
 
 class EvalFiltersCfg(BaseModel):
     """Filters limiting which runs or models are included in evaluation."""
-    # prázdné listy = nefiltrovat (evaluate všechno)
+
+    # Empty lists mean "do not filter".
     backends: List[Literal["yolo", "rfdetr"]] = Field(default_factory=list)
     variants: List[Literal["tuned", "pretrained"]] = Field(default_factory=list)
     model_ids: List[str] = Field(default_factory=list)
@@ -92,6 +106,7 @@ class EvalFiltersCfg(BaseModel):
 
 class EvalConfig(BaseModel):
     """Evaluation configuration for scoring and ranking runs."""
+
     gt_dir: str = "data/counts_gt"
     runs_dir: str = "runs"
     out_dir: str = "runs"
@@ -103,11 +118,15 @@ class EvalConfig(BaseModel):
 
     filters: EvalFiltersCfg = Field(default_factory=EvalFiltersCfg)
     charts: ChartsCfg = Field(default_factory=ChartsCfg)
-    # Timestamp is used to isolate evaluation output folders.
-    timestamp: str = Field(default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"),
+        description="Timestamp used to isolate evaluation output folders.",
+    )
+
 
 class MappingCfg(BaseModel):
     """Class mapping configuration."""
+
     tourist: int
     skier: int
     cyclist: int
@@ -120,35 +139,39 @@ class MappingCfg(BaseModel):
             "cyclist": self.cyclist,
             "tourist_dog": self.tourist_dog,
         }
+
     def _get(self, raw_class_id: int) -> Optional[int]:
         for canonical_id, name in enumerate(["tourist", "skier", "cyclist", "tourist_dog"]):
             if getattr(self, name) == raw_class_id:
                 return canonical_id
         return None
-    
 
 
 class ModelSpecCfg(BaseModel):
     """Single model entry in the registry."""
+
     model_id: str
     backend: Literal["yolo", "rfdetr"]
     variant: Literal["pretrained", "tuned"] = "tuned"
     weights: Optional[str] = None
     mapping: Optional[MappingCfg] = None
-    rfdetr_size: Optional[Literal["base", "small", "medium", "large", "nano"]] = None
+    rfdetr_size: Optional[Literal["base", "small", "medium", "large", "nano", "xlarge", "2xlarge"]] = None
 
     model_config = ConfigDict(extra="allow")
+
 
 class ModelsRegistry(BaseModel):
     """Supports both YAML shapes:
     A) flat dict: <id>: {...}
     B) wrapped: models: <id>: {...}
     """
+
     models: Dict[str, ModelSpecCfg] = Field(default_factory=dict)
+
     @model_validator(mode="before")
     @classmethod
     def _normalize(cls, data: Any):
-        # Allow a flat dict; wrap to the new shape.
+        # Allow a flat dict and wrap it to the new shape.
         if isinstance(data, dict) and "models" not in data:
             data = {"models": data}
 
@@ -161,7 +184,7 @@ class ModelsRegistry(BaseModel):
             for model_id, spec in models.items():
                 if isinstance(spec, dict):
                     spec = dict(spec)
-                    spec.setdefault("model_id", model_id)  # <-- tady
+                    spec.setdefault("model_id", model_id)
                 fixed[model_id] = spec
             data["models"] = fixed
 

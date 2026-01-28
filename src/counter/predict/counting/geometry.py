@@ -6,15 +6,23 @@ from counter.core.types import BBoxXYXY, LineCoords, Side
 
 
 def bottom_center(bbox: BBoxXYXY) -> Tuple[float, float]:
+    """Return the bottom-center point of a bounding box."""
     x1, y1, x2, y2 = bbox
     return (float(x1 + x2) / 2.0, float(y2))
 
 
 def _sign(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
+    """Compute the sign of the area for point-in-line tests."""
     return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
 
-def classify_point(line: LineCoords, point: Tuple[float, float], vid_resolution: Tuple[int, int], line_base_resolution: Tuple[int, int]) -> Side:
+def classify_point(
+    line: LineCoords,
+    point: Tuple[float, float],
+    vid_resolution: Tuple[int, int],
+    line_base_resolution: Tuple[int, int],
+) -> Side:
+    """Classify a point as IN/OUT/ON relative to a line in video coordinates."""
     x1, y1, x2, y2 = line
     vid_w, vid_h = vid_resolution
     base_w, base_h = line_base_resolution

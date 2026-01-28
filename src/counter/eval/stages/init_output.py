@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
@@ -7,6 +7,8 @@ from counter.core.utils import ensure_dir
 
 
 class InitOutput:
+    """Stage that prepares evaluation output directories and accumulators."""
+
     name = "InitOutput"
 
     def run(self, ctx: StageContext) -> None:
@@ -17,7 +19,7 @@ class InitOutput:
         ctx.state["out_root"] = out_root
         ctx.state["charts_dir"] = charts_dir
 
-        # připravíme sběrné tabulky (stejně jako ve tvém kódu)
+        # Initialize collector tables for subsequent stages.
         ctx.state["per_run_rows"] = []
         ctx.state["per_video_rows"] = []
         ctx.state["per_class_rows"] = []

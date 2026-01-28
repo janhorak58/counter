@@ -5,12 +5,14 @@ from typing import Any, Dict, List, Protocol
 
 
 class Stage(Protocol):
+    """Protocol for pipeline stages."""
     name: str
     def run(self, ctx: "StageContext") -> None: ...
 
 
 @dataclass
 class StageContext:
+    """Shared data passed between pipeline stages."""
     cfg: Any
     state: Dict[str, Any] = field(default_factory=dict)
     assets: Dict[str, Any] = field(default_factory=dict)
@@ -18,6 +20,7 @@ class StageContext:
 
 @dataclass
 class PipelineRunner:
+    """Sequential runner for pipeline stages."""
     stages: List[Stage]
     fail_fast: bool = True
 

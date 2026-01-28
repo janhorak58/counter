@@ -14,10 +14,11 @@ class MappingPolicy(ABC):
     - For COCO-style models, mapped ids may be intermediate (PERSON=100, ...).
       Finalization turns those into canonical counts.
     """
-    mapping : Optional[MappingCfg] = None
+    mapping: Optional[MappingCfg] = None
 
     @abstractmethod
     def map_raw(self, *, raw_class_id: int, raw_class_name: str) -> Optional[int]:
+        """Map raw class information to a (possibly intermediate) class id."""
         ...
 
     @abstractmethod
@@ -26,4 +27,5 @@ class MappingPolicy(ABC):
         in_counts: Dict[int, int],
         out_counts: Dict[int, int],
     ) -> Tuple[Dict[int, int], Dict[int, int]]:
+        """Finalize counts into canonical class IDs."""
         ...

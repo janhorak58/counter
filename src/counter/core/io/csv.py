@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 
 def write_csv(path: str | Path, rows: List[Dict[str, Any]], cols: List[str]) -> Path:
+    """Write rows to a CSV file using the provided column order."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
 

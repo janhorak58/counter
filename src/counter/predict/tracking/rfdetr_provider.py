@@ -1,5 +1,4 @@
-# src/counter/predict/tracking/rfdetr_provider.py
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +8,7 @@ import platform
 import numpy as np
 import supervision as sv
 
-from rfdetr import RFDETRBase, RFDETRLarge, RFDETRMedium, RFDETRSmall, RFDETRNano
+from rfdetr import RFDETRLarge, RFDETRMedium, RFDETRSmall, RFDETRNano, RFDETRXLarge, RFDETR2XLarge
 
 from counter.core.types import BBoxXYXY
 from counter.predict.tracking.providers import TrackProvider
@@ -17,23 +16,25 @@ from counter.predict.types import RawTrack
 
 
 def _make_rfdetr_model(model_size: str | None, weights: str | None):
+    """Instantiate an RF-DETR model with optional pretrained weights."""
     size = (model_size or "small").lower().strip()
     cls = {
         "nano": RFDETRNano,
         "small": RFDETRSmall,
         "medium": RFDETRMedium,
         "large": RFDETRLarge,
-        "base": RFDETRBase,
+        "xlarge": RFDETRLarge,
+        "2xlarge": RFDETRLarge,
     }.get(size)
 
     if cls is None:
         raise ValueError(f"Unsupported rfdetr_size={model_size!r}. Use one of: nano/small/medium/large/base")
 
-    # pretrained: weights=None -> default pretrain (download/cache řeší rfdetr)
+    # Pretrained: weights=None -> default pretrain (download/cache handled by rfdetr).
     if weights is None:
         return cls()
 
-    # tuned: weights=lokální checkpoint -> pretrain_weights=<path>
+    # Tuned: weights=local checkpoint -> pretrain_weights=<path>.
     p = Path(weights)
     if not p.exists():
         raise FileNotFoundError(f"RF-DETR weights file not found: {weights!r}")
@@ -43,24 +44,26 @@ def _make_rfdetr_model(model_size: str | None, weights: str | None):
 
 @dataclass
 class RfDetrTrackProvider(TrackProvider):
-    variant: str                    # "tuned" | "pretrained"
-    weights: Optional[str]          # tuned: local .pth, pretrained: None
-    model_size: str                 # "nano"|"small"|"medium"|"large"|"base"
-    device: str                     # "cpu" | "cuda" ... (rfdetr mapuje interně)
+    """RF-DETR-based track provider with optional ByteTrack."""
+
+    variant: str  # "tuned" | "pretrained"
+    weights: Optional[str]  # tuned: local .pth, pretrained: None
+    model_size: str  # "nano" | "small" | "medium" | "large" | "xlarge" | "2xlarge"
+    device: str  # "cpu" | "cuda" (RF-DETR maps internally)
     conf: float
-    tracking_type: str              # "none" | "bytetrack"
+    tracking_type: str  # "none" | "bytetrack"
     tracking_params: dict[str, Any]
 
-    # best-effort JIT/tracing zrychlení (na Windows často padá)
+    # Best-effort JIT/tracing speedup (often fails on Windows).
     optimize_for_inference: bool = True
 
     def __post_init__(self) -> None:
         self.model = _make_rfdetr_model(self.model_size, self.weights)
 
-        # Zrychlení inference: JIT trace (může padat podle torch/rfdetr verze)
+        # Best-effort inference optimization; may fail depending on torch/rfdetr version.
         if self.optimize_for_inference and hasattr(self.model, "optimize_for_inference"):
             try:
-                # Na CPU to většinou nestojí za to; na Windows to často padá.
+                # Skip on CPU and Windows; it is rarely worth it and often fails.
                 if self.device.lower() == "cpu":
                     raise RuntimeError("Skip optimize_for_inference on CPU (not worth it).")
                 if platform.system().lower().startswith("win"):
@@ -80,9 +83,11 @@ class RfDetrTrackProvider(TrackProvider):
         self.tracker = sv.ByteTrack(**(self.tracking_params or {}))
 
     def reset(self) -> None:
+        """Reset tracking state (reinitialize tracker)."""
         self._new_tracker()
 
     def update(self, frame_bgr: np.ndarray) -> list[RawTrack]:
+        """Run detection (and optional tracking) on a single frame."""
         frame_rgb = frame_bgr[:, :, ::-1].copy()
         detections: sv.Detections = self.model.predict(frame_rgb, threshold=float(self.conf))
 
@@ -99,7 +104,6 @@ class RfDetrTrackProvider(TrackProvider):
 
         out: list[RawTrack] = []
         n = len(detections)
-
         for i in range(n):
             x1, y1, x2, y2 = map(int, xyxy[i].tolist())
             score = float(scores[i]) if scores is not None else 1.0

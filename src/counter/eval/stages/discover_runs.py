@@ -8,6 +8,7 @@ from counter.eval.logic.discover import discover_predict_runs, passes_filters
 
 
 class DiscoverPredictRuns:
+    """Stage that discovers prediction runs and applies filters."""
     name = "DiscoverPredictRuns"
 
     def run(self, ctx: StageContext) -> None:

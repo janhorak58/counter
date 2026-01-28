@@ -7,7 +7,7 @@ from counter.core.types import CanonicalClass
 from counter.predict.mapping.base import MappingPolicy
 from counter.core.schema import MappingCfg, ModelSpecCfg
 
-# Internal intermediate classes
+# Intermediate class IDs for COCO-style mapping.
 PERSON = 100
 BICYCLE = 101
 SKIS = 102

@@ -10,6 +10,7 @@ from counter.predict.types import MappedTrack
 
 
 class NetState(Enum):
+    """Net state of a track relative to the counting line."""
     UNKNOWN = "unknown"
     IN = "in"
     OUT = "out"
@@ -17,6 +18,7 @@ class NetState(Enum):
 
 @dataclass
 class TrackState:
+    """Per-track state used for counting transitions."""
     side: Side = Side.ON
     net_state: NetState = NetState.UNKNOWN
     last_xy: Optional[Tuple[float, float]] = None
@@ -28,6 +30,7 @@ class TrackState:
 
 
 def _net_transition(prev: NetState, current_side: Side) -> NetState:
+    """Transition net state given the current side of the line."""
     if prev == NetState.UNKNOWN:
         if current_side == Side.IN:
             return NetState.IN
@@ -52,11 +55,12 @@ def _net_transition(prev: NetState, current_side: Side) -> NetState:
 
 @dataclass
 class NetStateCounter:
+    """Track line-crossing events based on per-track net state."""
     line: LineCoords
     line_base_resolution: Tuple[int, int] = (1920, 1080)
     greyzone_px: float = 0.0
 
-    # internal state
+    # Internal per-track state.
     states: Dict[int, TrackState] = None  # type: ignore
 
     def __post_init__(self) -> None:
@@ -66,13 +70,19 @@ class NetStateCounter:
     def reset(self) -> None:
         self.states = {}
 
-    def update(self, track: MappedTrack, xy: Tuple[float, float], class_id: int, video_resolution: Tuple[int, int]) -> Optional[str]:
+    def update(
+        self,
+        track: MappedTrack,
+        xy: Tuple[float, float],
+        class_id: int,
+        video_resolution: Tuple[int, int],
+    ) -> Optional[str]:
         """Update state of one track and return event: 'in' | 'out' | None."""
         st = self.states.setdefault(int(track.track_id), TrackState())
         st.vote_class(int(class_id))
 
         side = classify_point(self.line, xy, video_resolution, self.line_base_resolution)
-        
+
         prev_net = st.net_state
         new_net = _net_transition(prev_net, side)
         if track.initial_side == Side.UNKNOWN:

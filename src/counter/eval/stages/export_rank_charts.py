@@ -10,6 +10,7 @@ from counter.eval.logic.charts import export_summary_charts
 
 
 class RankExportCharts:
+    """Stage that ranks runs, exports metrics, and renders charts."""
     name = "RankExportCharts"
 
     def run(self, ctx: StageContext) -> None:

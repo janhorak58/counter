@@ -1,9 +1,9 @@
-
-# configs/predict.yaml
+﻿# Prediction configuration
 run_id: "local_predict"
-# model_id: "rfdetr_tuned/rfdetr_small_v6"   # musí existovat v models.yaml
-# model_id: "yolo_tuned/yolo8n_v2"   # musí existovat v models.yaml
-model_id: "yolo_pretrained/yolov8n"   # musí existovat v models.yaml
+# model_id: "rfdetr_tuned/rfdetr_small_v6"
+# model_id: "yolo_tuned/yolo8n_v2"
+# model_id: "yolo_pretrained/yolov8m"
+model_id: "rfdetr_pretrained/small"
 output_dir: "runs/predict"
 device: "cpu"
 
@@ -12,31 +12,33 @@ thresholds:
   iou: 0.50
 
 tracking:
-  type: "bytetrack"          # "none" | "bytetrack"
-  tracker_yaml: "bytetrack.yaml"    # jen pro YOLO ultralytics (když chceš)
-  params: {}            # pro supervision ByteTrack (RF-DETR)
+  type: "bytetrack"  # "none" | "bytetrack"
+  tracker_yaml: "bytetrack.yaml"  # YOLO-only (Ultralytics)
+  params: {}  # Supervision ByteTrack params (RF-DETR)
 
 videos_dir: "data/videos"
 videos:
   - "vid19.mp4"
+  - "vid4.mp4"
 
 probe_frames: 0
 
 export:
   save_video: true
+  out_video_resolution: [1280, 720]  # width, height
   save_raw: true
   save_counts_json: true
 
 debug: true
 
 preview:
-  enabled: true
-  every_n_frames: 1
+  enabled: false
+  every_n_frames: 20
   max_width: 1200
 
 line:
   name: "main_line"
-  coords: [846, 404, 1328, 456]   # x1, y1, x2, y2
-  default_resolution: [1920, 1080] # width, height
+  coords: [846, 404, 1328, 456]  # x1, y1, x2, y2
+  default_resolution: [1920, 1080]  # width, height
 
-greyzone_px: 10
+greyzone_px: 30

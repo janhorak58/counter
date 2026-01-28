@@ -18,6 +18,7 @@ def export_json_bundle(
     per_class: List[Dict[str, Any]],
     notes: Dict[str, str],
 ) -> None:
+    """Export evaluation results as JSON files."""
     dump_json(
         out_root / "benchmark.json",
         {
@@ -41,6 +42,7 @@ def export_csvs(
     per_video_rows: List[Dict[str, Any]],
     per_class_rows: List[Dict[str, Any]],
 ) -> None:
+    """Export evaluation results as CSV files."""
     per_run_cols = [
         "rank",
         "run_id",

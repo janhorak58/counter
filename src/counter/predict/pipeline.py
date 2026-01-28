@@ -12,16 +12,20 @@ from counter.predict.stages.finalize_run import FinalizeRun
 
 
 def _noop_log(event: str, payload: dict) -> None:  # pragma: no cover
+    """No-op logger used when logging is disabled."""
     return None
 
 
 class PredictPipeline:
+    """Orchestrate the prediction pipeline stages."""
 
     def __init__(self, *, models_yaml: str | Path = "configs/models.yaml", debug: bool = False):
+        """Initialize pipeline with the models registry path and debug flag."""
         self.models_yaml = Path(models_yaml)
         self.debug = bool(debug)
 
     def run(self, cfg: PredictConfig) -> Path:
+        """Run prediction pipeline and return the run directory."""
         ctx = StageContext(cfg=cfg, state={}, assets={"log": _noop_log})
 
         stages = [

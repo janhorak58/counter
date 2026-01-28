@@ -8,6 +8,7 @@ from counter.core.io import dump_json
 
 
 def now_iso() -> str:
+    """Return current local time as an ISO string (seconds precision)."""
     return datetime.now().isoformat(timespec="seconds")
 
 
@@ -19,6 +20,7 @@ def build_counts_object(
     out_count: Dict[int, int],
     meta: Dict[str, Any],
 ) -> Dict[str, Any]:
+    """Build a counts JSON-compatible dictionary."""
     return {
         "video": video,
         "line_name": line_name,
@@ -29,5 +31,5 @@ def build_counts_object(
 
 
 def write_counts_json(path: Path, obj: Dict[str, Any]) -> None:
+    """Write counts object as JSON to disk."""
     dump_json(path, obj)
-

@@ -19,14 +19,15 @@ class LineCoords:
 
     @staticmethod
     def from_start_end(start: Tuple[float, float], end: Tuple[float, float]) -> "LineCoords":
-        # Coerce tuple input to float coordinates.
+        """Build line coordinates from two (x, y) tuples."""
         return LineCoords(float(start[0]), float(start[1]), float(end[0]), float(end[1]))
 
     @staticmethod
     def from_coords(coords: Tuple[float, float, float, float]) -> "LineCoords":
-        # Coerce tuple input to float coordinates.
+        """Build line coordinates from a 4-tuple of floats."""
         return LineCoords(float(coords[0]), float(coords[1]), float(coords[2]), float(coords[3]))
-    
+
+
 class CanonicalClass(IntEnum):
     """Project-wide canonical class IDs."""
     TOURIST = 0
@@ -66,22 +67,22 @@ class Track:
 
     @property
     def x1(self) -> float:
-        # Convenience accessors for bbox tuple fields.
+        """Left x coordinate of the bounding box."""
         return self.bbox[0]
 
     @property
     def y1(self) -> float:
-        # Convenience accessors for bbox tuple fields.
+        """Top y coordinate of the bounding box."""
         return self.bbox[1]
 
     @property
     def x2(self) -> float:
-        # Convenience accessors for bbox tuple fields.
+        """Right x coordinate of the bounding box."""
         return self.bbox[2]
 
     @property
     def y2(self) -> float:
-        # Convenience accessors for bbox tuple fields.
+        """Bottom y coordinate of the bounding box."""
         return self.bbox[3]
 
     @property

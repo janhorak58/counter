@@ -8,8 +8,10 @@ from counter.core.io import dump_json
 from counter.core.pipeline.base import StageContext
 from counter.core.schema import PredictConfig
 
+
 @dataclass
 class FinalizeRun:
+    """Stage that writes run metadata and aggregates output paths."""
     name: str = "finalize_run"
 
     def run(self, ctx: StageContext) -> None:

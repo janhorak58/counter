@@ -6,6 +6,7 @@ from counter.core.types import CanonicalClass
 
 
 class LoadGTCounts:
+    """Stage that loads ground-truth counts and class metadata."""
     name = "LoadGTCounts"
 
     def run(self, ctx: StageContext) -> None:

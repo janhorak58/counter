@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -12,6 +12,8 @@ from counter.predict.visual.renderer import FrameRenderer
 
 @dataclass
 class BuildComponents:
+    """Stage that constructs model provider, mapper, counter, and renderer."""
+
     name: str = "build_components"
 
     def run(self, ctx: StageContext) -> None:
@@ -28,13 +30,12 @@ class BuildComponents:
 
         mapper = make_mapper(spec=spec, label_map=label_map, log=log)
 
-        # Counter uses mapper.finalize_counts to compute canonical counts
+        # Counter uses mapper.finalize_counts to compute canonical counts.
         counter = TrackCounter(
             line=tuple(cfg.line.coords),
             greyzone_px=float(cfg.greyzone_px),
             finalize_fn=mapper.finalize_counts,
             line_base_resolution=tuple(cfg.line.default_resolution),
-
         )
 
         renderer = FrameRenderer(
@@ -42,7 +43,7 @@ class BuildComponents:
             show_boxes=True,
             show_stats=True,
             show_raw=bool(ctx.state.get("debug", False)),
-            show_dropped_raw=bool(ctx.state.get("debug", False)),  # <-- přidej
+            show_dropped_raw=bool(ctx.state.get("debug", False)),
         )
 
         ctx.assets["provider"] = provider

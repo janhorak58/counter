@@ -1,5 +1,6 @@
-# src/counter/predict/tracking/factory.py
 from __future__ import annotations
+
+"""Factory for tracker providers based on model spec."""
 
 from counter.core.schema import PredictConfig, ModelSpecCfg
 from counter.predict.tracking.providers import TrackProvider
@@ -22,7 +23,7 @@ def make_provider(cfg: PredictConfig, spec: ModelSpecCfg) -> TrackProvider:
     if spec.backend == "rfdetr":
         return RfDetrTrackProvider(
             variant=spec.variant,
-            weights=spec.weights,  # tuned: cesta k .pth, pretrained: None
+            weights=spec.weights,  # tuned: local .pth, pretrained: None
             model_size=spec.rfdetr_size or "small",
             device=cfg.device,
             conf=cfg.thresholds.conf,

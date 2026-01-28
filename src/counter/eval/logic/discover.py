@@ -10,6 +10,7 @@ from counter.core.schema import EvalConfig
 
 @dataclass(frozen=True)
 class PredictRunInfo:
+    """Resolved metadata for a prediction run directory."""
     run_id: str
     run_dir: Path
     predict_dir: Path
@@ -75,21 +76,22 @@ def mk_runinfo_from_run_dir(run_dir: Path) -> Optional[PredictRunInfo]:
 
 
 def discover_predict_runs(runs_dir: str | Path) -> List[PredictRunInfo]:
+    """Discover prediction runs under the given directory."""
     p = Path(runs_dir)
     if not p.exists():
         return []
 
-    # 1) runs/<id> (contains run.json + predict/)
+    # Case 1: runs/<id> (contains run.json + predict/).
     if (p / "run.json").exists() and (p / "predict").exists():
         one = mk_runinfo_from_run_dir(p)
         return [one] if one else []
 
-    # 2) runs/<id>/predict passed directly
+    # Case 2: runs/<id>/predict passed directly.
     if p.name == "predict" and (p.parent / "run.json").exists():
         one = mk_runinfo_from_run_dir(p.parent)
         return [one] if one else []
 
-    # 3) runs/ directory
+    # Case 3: runs/ directory.
     out: List[PredictRunInfo] = []
     for run_dir in sorted([x for x in p.iterdir() if x.is_dir()]):
         info = mk_runinfo_from_run_dir(run_dir)

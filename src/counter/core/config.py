@@ -31,23 +31,21 @@ def load_yaml(path: str | Path) -> Any:
 
 
 def load_pydantic(path: str | Path, cls: Type[T]) -> T:
-    # Load raw YAML and validate against a Pydantic v2 model.
+    """Load YAML and validate it against a Pydantic v2 model."""
     data = load_yaml(path)
-    # pydantic v2 API
     return cls.model_validate(data)  # type: ignore[attr-defined]
 
 
 def load_models_registry(path: str | Path) -> ModelsRegistry:
-    # Models registry loader used by prediction and evaluation flows.
+    """Load the models registry YAML."""
     return load_pydantic(path, ModelsRegistry)
 
 
 def load_predict_config(path: str | Path) -> PredictConfig:
-    # Predict config loader.
+    """Load prediction configuration YAML."""
     return load_pydantic(path, PredictConfig)
 
 
 def load_eval_config(path: str | Path) -> EvalConfig:
-    # Eval config loader.
+    """Load evaluation configuration YAML."""
     return load_pydantic(path, EvalConfig)
-

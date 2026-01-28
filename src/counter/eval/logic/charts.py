@@ -1,18 +1,20 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union, Any
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 from counter.eval.logic.metrics import safe_div
 
 Counts = Union[Dict[int, int], Sequence[int]]
 
+
 def _sort_labels_values(labels: Sequence[str], values: Sequence[float]) -> tuple[list[str], list[float]]:
+    """Sort labels by value ascending, keeping labels aligned."""
     pairs = list(zip(labels, values))
-    # errors: lower is better → ascending
+    # Lower error is better, so sort ascending.
     pairs.sort(key=lambda t: (float("inf") if t[1] is None else float(t[1])))
     labs = [p[0] for p in pairs]
     vals = [float(p[1]) for p in pairs]
@@ -20,12 +22,14 @@ def _sort_labels_values(labels: Sequence[str], values: Sequence[float]) -> tuple
 
 
 def _ensure_parent(path: Union[str, Path]) -> Path:
+    """Ensure parent directory exists and return the Path."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def _sanitize(s: str) -> str:
+    """Normalize whitespace for chart titles."""
     s = re.sub(r"\s+", " ", str(s)).strip()
     return s
 
@@ -37,6 +41,7 @@ def bar_counts(
     pred: Counts,
     labels: Sequence[str],
 ) -> None:
+    """Render a grouped bar chart for GT vs predictions."""
     p = _ensure_parent(path)
 
     gt_list = [int(gt.get(i, 0)) for i in range(len(labels))] if isinstance(gt, dict) else [int(x) for x in gt]
@@ -67,6 +72,7 @@ def bar_metric(
     values: Sequence[float],
     ylabel: str = "",
 ) -> None:
+    """Render a bar chart for a single metric across labels."""
     p = _ensure_parent(path)
 
     x = list(range(len(labels)))
@@ -93,6 +99,7 @@ def scatter_xy(
     xlabel: str = "x",
     ylabel: str = "y",
 ) -> None:
+    """Render a labeled scatter plot."""
     p = _ensure_parent(path)
 
     fig = plt.figure(figsize=(6.8, 5.6))
@@ -123,6 +130,7 @@ def heatmap_matrix(
     ylabel: str = "",
     fmt: str = "{:.2f}",
 ) -> None:
+    """Render a heatmap from a matrix of values."""
     p = _ensure_parent(path)
 
     fig = plt.figure(figsize=(10, 6))
@@ -141,7 +149,7 @@ def heatmap_matrix(
     if ylabel:
         ax.set_ylabel(ylabel)
 
-    # annotate values
+    # Annotate values.
     for i in range(len(y_labels)):
         for j in range(len(x_labels)):
             v = matrix[i][j]
@@ -159,6 +167,7 @@ def heatmap_matrix(
     fig.savefig(str(p), dpi=150)
     plt.close(fig)
 
+
 def export_summary_charts(
     *,
     charts_dir: Path,
@@ -168,6 +177,7 @@ def export_summary_charts(
     per_class_rows: List[Dict[str, Any]],
     class_names: List[str],
 ) -> None:
+    """Export summary charts to the charts directory."""
     if len(ranked_runs) < 1:
         return
 
@@ -181,15 +191,13 @@ def export_summary_charts(
         d.mkdir(parents=True, exist_ok=True)
     labels = [str(r["model_id"]) for r in ranked_runs]
 
-    # -------- Leaderboards (per-run metrics) --------
-    # Add here whatever columns you export in per_run_row
+    # Leaderboards (per-run metrics).
     run_metric_fields = [
-        score_field,                 # whatever cfg picked
+        score_field,
         "score_total_event_wape",
         "score_total_video_mae",
         "score_total_class_wape",
         "score_total_rate_mae",
-        # WAPE variants (if present)
         "wape_micro_in",
         "wape_micro_out",
         "wape_wmacro_gt_in",
@@ -198,7 +206,6 @@ def export_summary_charts(
         "wape_out_totalcounts",
         "wape_in_total_l1",
         "wape_out_total_l1",
-        # totals (if present)
         "mae_in_total",
         "mae_out_total",
         "rmse_in_total",
@@ -207,12 +214,12 @@ def export_summary_charts(
         "mae_out_total_counts",
     ]
 
-    # de-dup keep order
+    # De-dup while preserving order.
     seen = set()
     run_metric_fields = [f for f in run_metric_fields if not (f in seen or seen.add(f))]
 
     for field in run_metric_fields:
-        # skip if field not present at all
+        # Skip if field is not present at all.
         if not any(field in r for r in ranked_runs):
             continue
         vals = [float(r.get(field, 0.0) or 0.0) for r in ranked_runs]
@@ -226,33 +233,56 @@ def export_summary_charts(
             ylabel=field,
         )
 
-    # -------- Scatters (paired IN vs OUT) --------
-    # Each tuple: (x_field, y_field, filename, title, xlabel, ylabel)
+    # Scatters (paired IN vs OUT).
     scatter_specs = [
-        ("mae_in_total", "mae_out_total",
-         "scatter_mae_total_in_vs_out.png",
-         "MAE total: IN vs OUT",
-         "MAE IN total", "MAE OUT total"),
-        ("rmse_in_total", "rmse_out_total",
-         "scatter_rmse_total_in_vs_out.png",
-         "RMSE total: IN vs OUT",
-         "RMSE IN total", "RMSE OUT total"),
-        ("wape_micro_in", "wape_micro_out",
-         "scatter_wape_micro_in_vs_out.png",
-         "WAPE micro: IN vs OUT",
-         "WAPE micro IN", "WAPE micro OUT"),
-        ("wape_wmacro_gt_in", "wape_wmacro_gt_out",
-         "scatter_wape_wmacro_gt_in_vs_out.png",
-         "WAPE weighted-macro(GT): IN vs OUT",
-         "WAPE wmacro GT IN", "WAPE wmacro GT OUT"),
-        ("wape_in_totalcounts", "wape_out_totalcounts",
-         "scatter_wape_totalcounts_in_vs_out.png",
-         "WAPE total-counts: IN vs OUT",
-         "WAPE total-counts IN", "WAPE total-counts OUT"),
-        ("wape_in_total_l1", "wape_out_total_l1",
-         "scatter_wape_total_l1_in_vs_out.png",
-         "WAPE L1-total: IN vs OUT",
-         "WAPE L1 IN", "WAPE L1 OUT"),
+        (
+            "mae_in_total",
+            "mae_out_total",
+            "scatter_mae_total_in_vs_out.png",
+            "MAE total: IN vs OUT",
+            "MAE IN total",
+            "MAE OUT total",
+        ),
+        (
+            "rmse_in_total",
+            "rmse_out_total",
+            "scatter_rmse_total_in_vs_out.png",
+            "RMSE total: IN vs OUT",
+            "RMSE IN total",
+            "RMSE OUT total",
+        ),
+        (
+            "wape_micro_in",
+            "wape_micro_out",
+            "scatter_wape_micro_in_vs_out.png",
+            "WAPE micro: IN vs OUT",
+            "WAPE micro IN",
+            "WAPE micro OUT",
+        ),
+        (
+            "wape_wmacro_gt_in",
+            "wape_wmacro_gt_out",
+            "scatter_wape_wmacro_gt_in_vs_out.png",
+            "WAPE weighted-macro(GT): IN vs OUT",
+            "WAPE wmacro GT IN",
+            "WAPE wmacro GT OUT",
+        ),
+        (
+            "wape_in_totalcounts",
+            "wape_out_totalcounts",
+            "scatter_wape_totalcounts_in_vs_out.png",
+            "WAPE total-counts: IN vs OUT",
+            "WAPE total-counts IN",
+            "WAPE total-counts OUT",
+        ),
+        (
+            "wape_in_total_l1",
+            "wape_out_total_l1",
+            "scatter_wape_total_l1_in_vs_out.png",
+            "WAPE L1-total: IN vs OUT",
+            "WAPE L1 IN",
+            "WAPE L1 OUT",
+        ),
     ]
 
     for xf, yf, fname, title, xl, yl in scatter_specs:
@@ -270,7 +300,7 @@ def export_summary_charts(
             ylabel=yl,
         )
 
-    # -------- Per-video heatmaps --------
+    # Per-video heatmaps.
     videos = sorted({Path(r["video"]).stem for r in per_video_rows})
     if videos:
         run_labels = [str(r["model_id"]) for r in ranked_runs]
@@ -288,7 +318,6 @@ def export_summary_charts(
                 mat[ri][vj] = value_fn(r)
             return mat
 
-        # existing: abs error total (class-aware)
         mat_in = build_matrix(lambda r: float(r.get("abs_err_in_total", nan)))
         mat_out = build_matrix(lambda r: float(r.get("abs_err_out_total", nan)))
         heatmap_matrix(
@@ -312,7 +341,7 @@ def export_summary_charts(
             fmt="{:.0f}",
         )
 
-        # NEW: old-style abs error totals if present
+        # Old-style abs error totals if present.
         if any("abs_err_in_total_counts" in r for r in per_video_rows):
             mat_in_cnt = build_matrix(lambda r: float(r.get("abs_err_in_total_counts", nan)))
             heatmap_matrix(
@@ -338,8 +367,7 @@ def export_summary_charts(
                 fmt="{:.0f}",
             )
 
-        # NEW: per-video WAPE heatmaps (class-aware L1 / GT_total)
-        # wape_video_in = abs_err_in_total / gt_in_total
+        # Per-video WAPE heatmaps (class-aware L1 / GT_total).
         if any(("abs_err_in_total" in r) and ("gt_in_total" in r) for r in per_video_rows):
             mat_wape_in = build_matrix(
                 lambda r: safe_div(float(r.get("abs_err_in_total", nan)), float(r.get("gt_in_total", 0) or 0))
@@ -369,7 +397,7 @@ def export_summary_charts(
                 fmt="{:.3f}",
             )
 
-    # -------- Class heatmaps (existing) --------
+    # Class heatmaps.
     run_labels = [str(r["model_id"]) for r in ranked_runs]
     class_cols = class_names
     idx_run = {str(r["run_id"]): i for i, r in enumerate(ranked_runs)}
@@ -410,8 +438,7 @@ def export_summary_charts(
         fmt="{:.2f}",
     )
 
-
-    # MAIN set (3–5 key charts)
+    # Main set (3-5 key charts).
     main_fields = [
         "score_total_event_wape",
         "score_total_video_mae",
@@ -430,8 +457,7 @@ def export_summary_charts(
                 ylabel=field,
             )
 
-    # 2x scatter / heatmap as “overview”
-    # scatter: MAE IN vs OUT
+    # Overview scatter: MAE IN vs OUT.
     if any(("mae_in_total" in r) or ("mae_out_total" in r) for r in ranked_runs):
         x = [float(r.get("mae_in_total", 0.0) or 0.0) for r in ranked_runs]
         y = [float(r.get("mae_out_total", 0.0) or 0.0) for r in ranked_runs]
@@ -445,7 +471,25 @@ def export_summary_charts(
             ylabel="MAE OUT total",
         )
 
-    # heatmaps by class (if present)
-    # (pokud je generuješ výše do heat_dir, tak je klidně v main vygeneruj znovu – nebo si udělej copy)
-    # tady nejjednodušší: znovu vygenerovat už máš data mat_cls_in/mat_cls_out,
-    # takže stačí zavolat heatmap_matrix do main_dir stejně jako do heat_dir.
+    # Optionally include class heatmaps in the main folder by reusing matrices.
+    if per_class_rows:
+        heatmap_matrix(
+            main_dir / "heatmap_mae_by_class_IN.png",
+            "MAE by class (IN)",
+            x_labels=class_cols,
+            y_labels=run_labels,
+            matrix=mat_cls_in,
+            xlabel="class",
+            ylabel="model",
+            fmt="{:.2f}",
+        )
+        heatmap_matrix(
+            main_dir / "heatmap_mae_by_class_OUT.png",
+            "MAE by class (OUT)",
+            x_labels=class_cols,
+            y_labels=run_labels,
+            matrix=mat_cls_out,
+            xlabel="class",
+            ylabel="model",
+            fmt="{:.2f}",
+        )

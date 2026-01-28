@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,11 +22,13 @@ from counter.core.pipeline.base import StageContext
 
 
 def _discover_videos(videos_dir: Path) -> List[str]:
+    """Return video filenames in a directory by common extensions."""
     exts = {".mp4", ".avi", ".mov", ".mkv"}
     return [p.name for p in sorted(videos_dir.iterdir()) if p.is_file() and p.suffix.lower() in exts]
 
 
 def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
+    """Open OpenCV video writer for the requested path."""
     if cv2 is None:
         raise ImportError("OpenCV (cv2) is required for save_video=True")
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -34,6 +36,7 @@ def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
 
 
 def _scale_line(coords, src_w: int, src_h: int, dst_w: int, dst_h: int):
+    """Scale line coordinates from a base resolution to a target resolution."""
     sx = dst_w / float(src_w)
     sy = dst_h / float(src_h)
     x1, y1, x2, y2 = coords
@@ -44,8 +47,11 @@ def _scale_line(coords, src_w: int, src_h: int, dst_w: int, dst_h: int):
         int(round(y2 * sy)),
     ]
 
+
 @dataclass
 class PredictVideos:
+    """Stage that runs tracking and counting over videos."""
+
     name: str = "predict_videos"
 
     def run(self, ctx: StageContext) -> None:
@@ -56,10 +62,10 @@ class PredictVideos:
         predict_dir: Path = ctx.state["predict_dir"]
         log = ctx.assets.get("log")
 
-        provider : TrackProvider = ctx.assets["provider"]
-        mapper : TrackMapper = ctx.assets["mapper"]
-        counter : TrackCounter = ctx.assets["counter"]
-        renderer : FrameRenderer = ctx.assets["renderer"]
+        provider: TrackProvider = ctx.assets["provider"]
+        mapper: TrackMapper = ctx.assets["mapper"]
+        counter: TrackCounter = ctx.assets["counter"]
+        renderer: FrameRenderer = ctx.assets["renderer"]
 
         videos_dir = Path(cfg.videos_dir)
         videos = list(cfg.videos)
@@ -82,36 +88,45 @@ class PredictVideos:
                 continue
 
             vinfo: VideoInfo = get_video_info(str(video_path))
-            # škálování čáry podle velikosti videa
+            # Scale the counting line to match the video resolution.
             base_w, base_h = cfg.line.default_resolution
-            line_coords = _scale_line(cfg.line.coords, src_w=base_w, src_h=base_h, dst_w=vinfo.width, dst_h=vinfo.height)
+            line_coords = _scale_line(
+                cfg.line.coords,
+                src_w=base_w,
+                src_h=base_h,
+                dst_w=vinfo.width,
+                dst_h=vinfo.height,
+            )
             provider.reset()
             counter.reset(video_resolution=(vinfo.width, vinfo.height))
 
             counter.line = tuple(line_coords)
             renderer.line = tuple(line_coords)
 
-
             writer = None
             out_video_path: Optional[Path] = None
             if cfg.save_video:
+                out_video_resolution = cfg.out_video_resolution
                 out_video_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
-                writer = _open_writer(out_video_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height))
+                writer = _open_writer(out_video_path, fps=vinfo.fps or 25.0, size=out_video_resolution)
 
-            log("video_start", {"video": vid, "fps": vinfo.fps, "frames": vinfo.frame_count, "size": [vinfo.width, vinfo.height]})
+            log(
+                "video_start",
+                {"video": vid, "fps": vinfo.fps, "frames": vinfo.frame_count, "size": [vinfo.width, vinfo.height]},
+            )
 
             for frame_idx, frame_bgr in iter_frames(str(video_path)):
                 raw_tracks = provider.update(frame_bgr)
                 mapped_tracks = mapper.map_tracks(raw_tracks)
                 counter.update(mapped_tracks)
 
-                # overlay
+                # Overlay statistics on output or preview frames.
                 if cfg.save_video or preview_enabled:
                     in_c, out_c = counter.snapshot_counts()
                     renderer.render(
                         frame_bgr,
                         tracks=mapped_tracks,
-                        raw_tracks=raw_tracks, 
+                        raw_tracks=raw_tracks,
                         in_counts=in_c,
                         out_counts=out_c,
                         frame_idx=int(frame_idx),
@@ -126,7 +141,7 @@ class PredictVideos:
                     prev = renderer.preview_frame(frame_bgr, max_width=preview_max_w)
                     cv2.imshow(f"predict::{run_id}", prev)
                     key = cv2.waitKey(1)
-                    if key in (ord('q'), 27):
+                    if key in (ord("q"), 27):
                         preview_enabled = False
                         cv2.destroyAllWindows()
 
@@ -176,10 +191,19 @@ class PredictVideos:
                 },
             }
 
-            obj = build_counts_object(video=vid, line_name=cfg.line.name, in_count=in_final, out_count=out_final, meta=meta)
+            obj = build_counts_object(
+                video=vid,
+                line_name=cfg.line.name,
+                in_count=in_final,
+                out_count=out_final,
+                meta=meta,
+            )
             write_counts_json(counts_path, obj)
             out_counts_paths.append(str(counts_path))
 
-            log("video_done", {"video": vid, "counts": {"in": in_final, "out": out_final}, "counts_path": str(counts_path)})
+            log(
+                "video_done",
+                {"video": vid, "counts": {"in": in_final, "out": out_final}, "counts_path": str(counts_path)},
+            )
 
         ctx.state["counts_paths"] = out_counts_paths

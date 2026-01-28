@@ -20,5 +20,5 @@ class TunedMapping(MappingPolicy):
         in_counts: Dict[int, int],
         out_counts: Dict[int, int],
     ) -> Tuple[Dict[int, int], Dict[int, int]]:
-        # Already canonical
+        """Counts are already canonical for tuned models."""
         return dict(in_counts), dict(out_counts)

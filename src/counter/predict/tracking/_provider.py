@@ -14,6 +14,7 @@ except Exception:  # pragma: no cover
 
 
 def _norm_optional_str(x: Optional[str]) -> Optional[str]:
+    """Normalize empty or null-like strings to None."""
     if x is None:
         return None
     s = str(x).strip()
@@ -25,6 +26,7 @@ def _norm_optional_str(x: Optional[str]) -> Optional[str]:
 
 
 class UltralyticsYoloTrackProvider(TrackProvider):
+    """Ultralytics YOLO-based tracker provider."""
     def __init__(
         self,
         *,
@@ -54,7 +56,7 @@ class UltralyticsYoloTrackProvider(TrackProvider):
         self.model.to(self._device)
 
     def reset(self) -> None:
-        # Ultralytics keeps tracking state internally; simplest is to re-init the model.
+        """Reset tracker state by reloading the model."""
         self.model = YOLO(self._weights)
         self.model.to(self._device)
 
@@ -68,7 +70,7 @@ class UltralyticsYoloTrackProvider(TrackProvider):
         return None
 
     def update(self, frame_bgr) -> List[RawTrack]:
-        # --- run model ---
+        """Run detection/tracking and return raw tracks for one frame."""
         if self._tracking_enabled:
             kwargs: Dict[str, Any] = dict(
                 conf=self._conf,
@@ -77,7 +79,7 @@ class UltralyticsYoloTrackProvider(TrackProvider):
                 verbose=False,
                 **self._tracker_params,
             )
-            # IMPORTANT: don't pass tracker at all if it's None/empty, otherwise Ultralytics tries to open file "None"
+            # Do not pass tracker if it's None/empty; Ultralytics tries to open file "None".
             if self._tracker_yaml is not None:
                 kwargs["tracker"] = self._tracker_yaml
 
@@ -103,11 +105,11 @@ class UltralyticsYoloTrackProvider(TrackProvider):
         confs = boxes.conf.cpu().numpy().astype(float).tolist()
         class_ids = boxes.cls.cpu().numpy().astype(int).tolist()
 
-        # tracking ids (may be missing)
+        # Tracking IDs may be missing.
         if getattr(boxes, "id", None) is not None:
             track_ids = boxes.id.cpu().numpy().astype(int).tolist()
         else:
-            # fallback: stable per-frame ids (not real tracking)
+            # Fallback: stable per-frame ids (not real tracking).
             track_ids = list(range(len(class_ids)))
 
         names = self.get_label_map() or {}

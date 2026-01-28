@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+"""Prediction-time data structures."""
+
 from dataclasses import dataclass
-from typing import Tuple
 
 from counter.core.types import BBoxXYXY
 from counter.core.types import Side
 
+
 @dataclass(frozen=True)
 class RawTrack:
+    """Raw tracker output before class mapping."""
     track_id: int
     bbox: BBoxXYXY
     score: float
@@ -15,9 +18,9 @@ class RawTrack:
     raw_class_name: str
 
 
-
 @dataclass
 class MappedTrack:
+    """Tracked object with mapped class and line side state."""
     track_id: int
     bbox: BBoxXYXY
     score: float
