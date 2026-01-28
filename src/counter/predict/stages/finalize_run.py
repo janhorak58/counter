@@ -31,7 +31,7 @@ class FinalizeRun:
             "backend": spec.backend,
             "variant": spec.variant,
             "weights": spec.weights,
-            "mapping": spec.mapping,
+            "mapping": spec.mapping._get_dict() if spec.mapping is not None else None,
             "thresholds": {"conf": cfg.thresholds.conf, "iou": cfg.thresholds.iou},
             "tracker": {"type": cfg.tracking.type, "params": cfg.tracking.params},
             "line": {"name": cfg.line.name, "coords": list(cfg.line.coords)},
