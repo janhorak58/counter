@@ -34,6 +34,8 @@ class BuildComponents:
         counter = TrackCounter(
             line=tuple(cfg.line.coords),
             greyzone_px=float(cfg.greyzone_px),
+            oscillation_window_frames=int(getattr(cfg, "oscillation_window_frames", 0)),
+            trajectory_len=int(getattr(cfg, "trajectory_len", 40)),
             finalize_fn=mapper.finalize_counts,
             line_base_resolution=tuple(cfg.line.default_resolution),
             log=log,
@@ -45,6 +47,7 @@ class BuildComponents:
             show_stats=True,
             show_raw=bool(ctx.state.get("debug", False)),
             show_dropped_raw=bool(ctx.state.get("debug", False)),
+            show_trajectories=True,
         )
 
         ctx.assets["provider"] = provider

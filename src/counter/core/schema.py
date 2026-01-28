@@ -85,6 +85,10 @@ class PredictConfig(BaseModel):
     preview: PreviewCfg = Field(default_factory=PreviewCfg)
     save_video: bool = True
 
+    
+    oscillation_window_frames: int = 0
+    trajectory_len: int = 40
+
 
 class ChartsCfg(BaseModel):
     """Optional chart generation settings for evaluation."""

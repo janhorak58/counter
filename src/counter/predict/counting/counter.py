@@ -18,27 +18,37 @@ def _fill_missing(counts: Dict[int, int], keys: Iterable[int]) -> Dict[int, int]
 
 @dataclass
 class TrackCounter:
-    """Count in/out events for tracked objects crossing a line."""
+    """Count in/out events for tracked objects crossing a line.
+
+    This counter is robust against short oscillations (crossing and returning)
+    by undoing events when the track returns to its initial side within
+    oscillation_window_frames.
+
+    Trajectories of the last `trajectory_len` frames are stored inside NetStateCounter
+    and can be used for visualization.
+    """
 
     line: LineCoords
     finalize_fn: FinalizeFn
     greyzone_px: float = 0.0
-    oscillation_window_frames: int = 0
+    oscillation_window_frames: int = 40
+    trajectory_len: int = 40
     line_base_resolution: Tuple[int, int] = (1920, 1080)
-    log : Callable[..., None] = lambda *a, **k: None
+    log: Callable[..., None] = lambda *a, **k: None
+
     def __post_init__(self) -> None:
         self.net = NetStateCounter(
             line=self.line,
             line_base_resolution=self.line_base_resolution,
             greyzone_px=self.greyzone_px,
+            oscillation_window_frames=int(self.oscillation_window_frames),
+            trajectory_len=int(self.trajectory_len),
         )
         self.raw_in_counts: Dict[int, int] = {}
         self.raw_out_counts: Dict[int, int] = {}
         self._frame_idx: int = 0
-        self._last_counted: Dict[int, Tuple[int, str, int]] = {}
         self.video_resolution: Tuple[int, int] = (1920, 1080)
         self._canon_ids: List[int] = [int(c.value) for c in CanonicalClass]
-
 
     def reset(self, video_resolution: Tuple[int, int]) -> None:
         """Reset internal counters for a new video."""
@@ -46,7 +56,6 @@ class TrackCounter:
         self.raw_in_counts = {}
         self.raw_out_counts = {}
         self._frame_idx = 0
-        self._last_counted = {}
         self.video_resolution = video_resolution
 
     def update(self, tracks: List[MappedTrack]) -> None:
@@ -55,44 +64,39 @@ class TrackCounter:
 
         for tr in tracks:
             tid = int(tr.track_id)
-
-            last = self._last_counted.get(tid)
-            if last is not None and tr.initial_side is not None:
-                last_frame, last_ev, last_cid = last
-                dt = self._frame_idx - last_frame
-
-                returned = (tr.current_side == tr.initial_side)
-                if returned and dt <= int(self.oscillation_window_frames):
-                    if last_ev == "in":
-                        self.raw_in_counts[last_cid] = max(0, int(self.raw_in_counts.get(last_cid, 0)) - 1)
-                    elif last_ev == "out":
-                        self.raw_out_counts[last_cid] = max(0, int(self.raw_out_counts.get(last_cid, 0)) - 1)
-
-                    self._last_counted.pop(tid, None)
-                    continue
-
-            # Count regular crossing events.
             xy = bottom_center(tr.bbox)
+
             ev = self.net.update(
                 track=tr,
                 xy=xy,
-                class_id=tr.mapped_class_id,
+                class_id=int(tr.mapped_class_id),
                 video_resolution=self.video_resolution,
+                frame_idx=int(self._frame_idx),
             )
             if not ev:
                 continue
 
-            voted = self.net.states[tid].voted_class_id
+            voted = self.net.states[tid].voted_class_id if tid in self.net.states else None
             cid = int(voted) if voted is not None else int(tr.mapped_class_id)
 
             if ev == "in":
                 self.log("Line crossed IN", {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx})
                 self.raw_in_counts[cid] = int(self.raw_in_counts.get(cid, 0) + 1)
             elif ev == "out":
-                self.log("Line crossed IN", {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx})
+                self.log("Line crossed OUT", {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx})
                 self.raw_out_counts[cid] = int(self.raw_out_counts.get(cid, 0) + 1)
-
-            self._last_counted[tid] = (self._frame_idx, str(ev), cid)
+            elif ev == "undo_in":
+                self.log(
+                    "Undo IN (returned)",
+                    {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx},
+                )
+                self.raw_in_counts[cid] = max(0, int(self.raw_in_counts.get(cid, 0)) - 1)
+            elif ev == "undo_out":
+                self.log(
+                    "Undo OUT (returned)",
+                    {"track_id": tid, "class_id": cid, "frame_idx": self._frame_idx},
+                )
+                self.raw_out_counts[cid] = max(0, int(self.raw_out_counts.get(cid, 0)) - 1)
 
     def snapshot_counts(self) -> Tuple[Dict[int, int], Dict[int, int]]:
         """Return current counts with missing classes filled in."""

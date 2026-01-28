@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from counter.core.schema import PredictConfig, ModelSpecCfg
 from counter.predict.tracking.providers import TrackProvider
-from counter.predict.tracking._provider import UltralyticsYoloTrackProvider
+from counter.predict.tracking.yolo_provider import UltralyticsYoloTrackProvider
 from counter.predict.tracking.rfdetr_provider import RfDetrTrackProvider
 
 

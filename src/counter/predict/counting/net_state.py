@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Deque, Dict, List, Optional, Tuple
 
 from counter.core.types import LineCoords, Side
 from counter.predict.counting.geometry import classify_point
@@ -10,65 +11,71 @@ from counter.predict.types import MappedTrack
 
 
 class NetState(Enum):
-    """Net state of a track relative to the counting line."""
+    """Coarse net state of a track relative to its initial side."""
+
     UNKNOWN = "unknown"
-    IN = "in"
-    OUT = "out"
+    AT_INITIAL = "at_initial"
+    AWAY = "away"
 
 
 @dataclass
 class TrackState:
-    """Per-track state used for counting transitions."""
-    side: Side = Side.ON
+    """Per-track state used for counting and optional visualization."""
+
+    initial_side: Side = Side.UNKNOWN
+    current_side: Side = Side.UNKNOWN
+
     net_state: NetState = NetState.UNKNOWN
-    last_xy: Optional[Tuple[float, float]] = None
+
     voted_class_id: Optional[int] = None
+
+    # If the object has been counted away from its initial side, remember direction and frame.
+    counted_dir: Optional[str] = None  # 'in' | 'out'
+    counted_frame: Optional[int] = None
+
+    # Last N points (bottom-center), for debug rendering.
+    history: Deque[Tuple[float, float]] = field(default_factory=deque)
 
     def vote_class(self, class_id: int) -> None:
         if self.voted_class_id is None:
             self.voted_class_id = int(class_id)
 
 
-def _net_transition(prev: NetState, current_side: Side) -> NetState:
-    """Transition net state given the current side of the line."""
-    if prev == NetState.UNKNOWN:
-        if current_side == Side.IN:
-            return NetState.IN
-        if current_side == Side.OUT:
-            return NetState.OUT
-        return NetState.UNKNOWN
-
-    if prev == NetState.IN:
-        if current_side in (Side.IN, Side.ON):
-            return NetState.IN
-        if current_side == Side.OUT:
-            return NetState.OUT
-
-    if prev == NetState.OUT:
-        if current_side in (Side.OUT, Side.ON):
-            return NetState.OUT
-        if current_side == Side.IN:
-            return NetState.IN
-
-    return prev
-
-
 @dataclass
 class NetStateCounter:
-    """Track line-crossing events based on per-track net state."""
+    """Track line events relative to each track's initial side.
+
+    Rules:
+    - initial_side is set once (first non-ON side).
+    - event is emitted when current_side becomes the opposite side of initial_side.
+    - if the track returns back to initial_side within oscillation_window_frames, an undo event is emitted.
+
+    Events:
+    - 'in' | 'out'
+    - 'undo_in' | 'undo_out'
+    - None
+    """
+
     line: LineCoords
     line_base_resolution: Tuple[int, int] = (1920, 1080)
     greyzone_px: float = 0.0
 
-    # Internal per-track state.
-    states: Dict[int, TrackState] = None  # type: ignore
+    oscillation_window_frames: int = 0
+    trajectory_len: int = 40
 
-    def __post_init__(self) -> None:
-        if self.states is None:
-            self.states = {}
+    # Internal per-track state.
+    states: Dict[int, TrackState] = field(default_factory=dict)
 
     def reset(self) -> None:
         self.states = {}
+
+    def get_trajectories(self) -> Dict[int, List[Tuple[float, float]]]:
+        """Return a copy of trajectories (track_id -> list of xy points)."""
+        out: Dict[int, List[Tuple[float, float]]] = {}
+        for tid, st in self.states.items():
+            if st.history:
+                out[int(tid)] = list(st.history)
+        return out
 
     def update(
         self,
@@ -76,24 +83,68 @@ class NetStateCounter:
         xy: Tuple[float, float],
         class_id: int,
         video_resolution: Tuple[int, int],
+        *,
+        frame_idx: int,
     ) -> Optional[str]:
-        """Update state of one track and return event: 'in' | 'out' | None."""
-        st = self.states.setdefault(int(track.track_id), TrackState())
+        """Update one track and return an event: 'in' | 'out' | 'undo_in' | 'undo_out' | None."""
+        tid = int(track.track_id)
+        st = self.states.get(tid)
+        if st is None:
+            st = TrackState()
+            st.history = deque(maxlen=int(self.trajectory_len))
+            self.states[tid] = st
+
         st.vote_class(int(class_id))
+        st.history.append((float(xy[0]), float(xy[1])))
 
         side = classify_point(self.line, xy, video_resolution, self.line_base_resolution, self.greyzone_px)
-
-        prev_net = st.net_state
-        new_net = _net_transition(prev_net, side)
-        if track.initial_side == Side.UNKNOWN:
-            track.initial_side = side
+        st.current_side = side
         track.current_side = side
-        st.side = side
-        st.net_state = new_net
-        st.last_xy = xy
 
-        if prev_net == NetState.IN and new_net == NetState.OUT:
-            return "out"
-        if prev_net == NetState.OUT and new_net == NetState.IN:
-            return "in"
+        # Initialize initial side once we get a stable side.
+        if track.initial_side == Side.UNKNOWN and side in (Side.IN, Side.OUT):
+            track.initial_side = side
+        if st.initial_side == Side.UNKNOWN and track.initial_side in (Side.IN, Side.OUT):
+            st.initial_side = track.initial_side
+
+        # Still unknown -> cannot decide.
+        if st.initial_side == Side.UNKNOWN:
+            st.net_state = NetState.UNKNOWN
+            return None
+
+        # Ignore ON state to reduce jitter near the line.
+        if side == Side.ON:
+            return None
+
+        if side == st.initial_side:
+            st.net_state = NetState.AT_INITIAL
+
+            # If we were counted away and we returned, we can undo.
+            if st.counted_dir is not None and st.counted_frame is not None:
+                dt = int(frame_idx) - int(st.counted_frame)
+                if int(self.oscillation_window_frames) <= 0 or dt <= int(self.oscillation_window_frames):
+                    ev = f"undo_{st.counted_dir}"
+                    st.counted_dir = None
+                    st.counted_frame = None
+                    return ev
+            return None
+
+        # We are on the opposite side of initial.
+        st.net_state = NetState.AWAY
+
+        desired: Optional[str] = None
+        if st.initial_side == Side.OUT and side == Side.IN:
+            desired = "in"
+        elif st.initial_side == Side.IN and side == Side.OUT:
+            desired = "out"
+
+        if desired is None:
+            return None
+
+        # Count only once while away.
+        if st.counted_dir is None:
+            st.counted_dir = desired
+            st.counted_frame = int(frame_idx)
+            return desired
+
         return None

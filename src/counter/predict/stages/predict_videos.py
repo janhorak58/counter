@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from counter.predict.tracking.providers import TrackProvider
 from counter.predict.mapping.track_mapper import TrackMapper
 from counter.predict.counting.counter import TrackCounter
+from counter.predict.types import MappedTrack
 from counter.predict.visual.renderer import FrameRenderer
 
 try:  # pragma: no cover
@@ -136,10 +137,12 @@ class PredictVideos:
                 {"video": vid, "fps": vinfo.fps, "frames": vinfo.frame_count, "size": [vinfo.width, vinfo.height]},
             )
 
+            all_mapped_tracks: Dict[int, MappedTrack] = {}
             for frame_idx, frame_bgr in iter_frames(str(video_path)):
                 raw_tracks = provider.update(frame_bgr)
                 mapped_tracks = mapper.map_tracks(raw_tracks)
-                counter.update(mapped_tracks)
+                all_mapped_tracks.update({int(tr.track_id): tr for tr in mapped_tracks})
+                counter.update(all_mapped_tracks.values())
 
                 # Overlay statistics on output or preview frames.
                 if cfg.save_video or preview_enabled:
@@ -153,6 +156,7 @@ class PredictVideos:
                         frame_idx=int(frame_idx),
                         fps=float(vinfo.fps) if vinfo.fps else None,
                         total_frames=int(vinfo.frame_count) if vinfo.frame_count else None,
+                        trajectories=counter.net.get_trajectories() if getattr(renderer, "show_trajectories", False) else None,
                     )
 
                 if writer is not None:
