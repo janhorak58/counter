@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "counter"
+version = "0.1.0"
+description = "Simple video object counter"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "torch",
+    "ultralytics>=8.0.0",
+    "pyyaml",
+    "rfdetr==1.4.0.post0",
+    "supervision>=0.27.0",
+]
+
+[project.scripts]
+counter = "counter.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+# Zakaž instalaci headless OpenCV (i když ho chce roboflow/rfdetr)
+exclude-dependencies = [
+  "opencv-python-headless",
+  "opencv-contrib-python-headless",
+]
+
+# Volitelné: připni opencv-python, ať je to deterministické
+# constraint-dependencies = ["opencv-python==4.13.0.90"]

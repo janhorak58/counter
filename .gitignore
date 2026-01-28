@@ -1,27 +1,67 @@
-data/
-*.pt
-runs/
-.venv/
-outputs/
+# --- Python ---
 __pycache__/
-*.zip
-/models/
-mess
-.env
-conf.yaml
-config.yaml
-*.csv
-*.mp4
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
 
+# --- Environments ---
+.venv/
+.venvs/
 .conda_envs/
 .pyuser/
-.ultralytics/
-.venvs/
-config.yaml.backup
-pbs_scripts_legacy/
-predictions/
-*.pth
-*.pbs
 
-eval/*
-!eval/README.md
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Secrets / local configs ---
+.env
+*.env
+conf.yaml
+config.yaml
+config.yaml.backup
+
+# --- Project data / artifacts (NEcommitovat) ---
+models/
+data/
+datasets/
+outputs/
+predictions/
+runs/
+eval/
+
+# --- Model weights / checkpoints ---
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# --- Media / exports ---
+*.mp4
+
+# --- Archives ---
+*.zip
+
+# --- Ultralytics caches ---
+.ultralytics/
+
+# --- Legacy / misc ---
+pbs_scripts_legacy/
+mess/
+*.pbs
+*.csv
+
+*.egg-info/

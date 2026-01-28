@@ -1,134 +1,145 @@
-# Counter
+# Counter – video line-crossing object counter (YOLO / RF-DETR)
 
-Video object counting with YOLO or RF-DETR detection and tracking.
+Počítá průchody objektů přes zadanou čáru ve videu (IN/OUT). Pipeline: **detekce → tracking → line-crossing logika → counts.json + volitelně video export**.
 
-## Setup
+## Kanonické třídy (výstup)
+Ve výstupech a evaluaci se používají fixní ID:
+
+- `0` = `TOURIST`
+- `1` = `SKIER`
+- `2` = `CYCLIST`
+- `3` = `TOURIST_DOG`
+
+> U **tuned** modelů se očekává, že model už predikuje tyhle 4 třídy (přímo nebo přes mapping).  
+> U **pretrained (COCO)** se používá “baseline” mapování (person/bicycle/dog/skis) + jednoduchá heuristika.
+
+---
+
+## Instalace přes `uv`
+
+V kořeni repozitáře (kde je `pyproject.toml`):
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate     # Windows
-pip install -r requirements.txt
+uv venv
+# Windows:
+# .venv\Scripts\activate
+# Linux/macOS:
+# source .venv/bin/activate
+
+uv pip install -e .
 ```
 
-Optional RF-DETR support:
+Test, že balíček žije:
+
 ```bash
-pip install rf-detr
+uv run python -c "import counter; print(counter.__name__)"
 ```
 
-## Modules
-- `predict`: run counting on a video, save annotated video + CSV with counts.
-- `eval`: compare predictions vs ground truth, compute metrics, optional detector validation, plots.
-- `eval_model`: evaluate detection models on dataset_yolo (YOLO) or dataset_coco (RF-DETR).
-- `train`: train a detector model from config.
+---
 
-## Config
-Edit `config.yaml` (see `config.example.yaml`).
+## Predikce / počítání
 
-### prediction
-- `paths.video_folder`: input videos folder.
-- `paths.output_folder`: annotated video output folder.
-- `paths.results_folder`: CSV counts output folder.
-- `paths.model_path`: YOLO weights to use.
-- `paths.video_filename`: input video filename.
-- `parameters.confidence_threshold`: detection confidence threshold.
-- `parameters.iou_threshold`: IOU threshold.
-- `parameters.grey_zone_size`: dead-zone width around the line.
-- `parameters.device`: `cpu` or GPU id (`0`, `0,1`).
-- `parameters.mode`: `custom` or `pretrained` (class mapping logic).
-- `parameters.model_type`: `yolo` or `rfdetr`.
-- `parameters.track_iou_threshold`: IOU threshold for RF-DETR tracking.
-- `parameters.track_max_lost`: max frames to keep a lost track (RF-DETR).
-- `parameters.track_match_classes`: require same class for matching (RF-DETR).
-- `parameters.rfdetr_box_format`: `xyxy`, `xywh`, or `cxcywh`.
-- `parameters.rfdetr_box_normalized`: `auto`, `true`, or `false`.
-- `parameters.use_interactive_lines`: `true` to pick lines in UI, `false` to use config lines.
-- `parameters.num_lines`: number of lines to draw in UI when interactive selection is on.
-- `parameters.lines`: list of line dicts with `start`, `end`, `name` when not interactive.
-- `parameters.show_window`: `true` to show OpenCV window, `false` to disable display.
-- `parameters.progress_every_n_frames`: print progress every N frames when display is off.
+Konfigurace:
+- `configs/predict.yaml` – co se má počítat (video, čára, thresholdy, export, preview)
+- `configs/models.yaml` – registry modelů + mapping
 
-### eval
-- `gt_folder`: ground truth CSV folder (default: `predictions/csv_gt`).
-- `pred_folder`: predicted CSV folder (default: `predictions/csv`).
-- `out_dir`: base output folder (timestamped run folders).
-- `plots`: enable plot generation.
-- `map_pretrained_counts`: map COCO count classes to custom classes.
-- `run_model_eval`: run detector evaluation.
-- `run_yolo_eval`: legacy alias for YOLO eval.
-- `model_type`: `yolo` or `rfdetr`.
-- `model_mode`: `custom` or `pretrained`.
-- `yolo_mode`: legacy alias for model_mode.
-- `model_path`: detector model for eval.
-- `data_yaml`: dataset yaml for val.
-- `device`: `cpu` or GPU id.
-- `conf`: confidence threshold for val.
-- `iou`: IOU threshold for val.
-- `split`: dataset split (`val`).
-- `rfdetr_box_format`: `xyxy`, `xywh`, or `cxcywh`.
-- `rfdetr_box_normalized`: `auto`, `true`, or `false`.
+Spuštění:
 
-### train
-- `model_type`: `yolo` or `rfdetr`.
-- `model`: base model (e.g., `yolov8n.pt`).
-- `data_yaml`: dataset yaml.
-- `epochs`: number of epochs.
-- `imgsz`: image size.
-- `batch`: batch size.
-- `workers`: dataloader workers.
-- `device`: `cpu`, `gpu`, or GPU id (`0`).
-- `patience`: early stopping patience.
-- `project`: output folder for runs.
-- `name`: run name.
-- `plots`: save training plots.
-- `save`: save checkpoints.
-- `cos_lr`: cosine LR schedule.
-
-## Run
-Prediction:
 ```bash
-python -m src.predict
+uv run python -m counter.predict --config configs/predict.yaml --models configs/models.yaml
 ```
 
-Evaluation:
-```bash
-python -m src.eval
+### Nejdůležitější položky v `configs/predict.yaml`
+- `model_id`: klíč z `configs/models.yaml` (např. `rfdetr_pretrained/small`)
+- `device`: `cpu` / `cuda:0`
+- `videos_dir` + `videos`: vstupní soubory
+- `line.coords`: `[x1, y1, x2, y2]` v pixelech
+- `line.default_resolution`: základní rozlišení, ve kterém byly coords nakreslené (automaticky se škáluje)
+- `greyzone_px`: tolerance okolo čáry (omezuje “kmitání”)
+- `thresholds.conf` / `thresholds.iou`
+- `tracking.type`: `none` | `bytetrack`
+- `export.*`: ukládání výstupů (video/raw/counts)
+- `preview.*`: živý náhled
+
+---
+
+## Model registry (`configs/models.yaml`)
+
+Každý model má:
+- `backend`: `yolo` nebo `rfdetr`
+- `variant`: `tuned` nebo `pretrained`
+- `weights`: cesta / název weights
+- `mapping`: význam závisí na variantě
+
+### Tuned modely
+Mapping je **raw_class_id → kanonická třída** (typicky už 0..3):
+
+```yaml
+mapping:
+  tourist: 0
+  skier: 1
+  cyclist: 2
+  tourist_dog: 3
 ```
 
-Model evaluation:
-```bash
-python -m src.eval_model --model-type yolo --model-path models/yolo/v2/yolov8n_v12/weights/best.pt
+### Pretrained (COCO) modely
+Mapping říká, jaké raw ID odpovídá COCO třídám, které používáme jako baseline:
+
+- `tourist` = **person**
+- `cyclist` = **bicycle**
+- `tourist_dog` = **dog**
+- `skier` = **skis**
+
+Příklad (RF-DETR COCO):
+```yaml
+mapping:
+  tourist: 1      # person
+  cyclist: 2      # bicycle
+  tourist_dog: 18 # dog
+  skier: 35       # skis
 ```
 
-Training:
+Heuristika (baseline) typicky dělá:
+- `cyclist = bicycle`
+- `skier = skis`
+- `tourist = max(person - bicycle - skis, 0)`
+- `tourist_dog = dog`
+
+> Pokud ti “nesedí třídy”, není to magie: jen máš špatně `mapping` pro daný pretrained model.
+
+---
+
+## Výstupy
+
+Predikce ukládá do `output_dir` (v `configs/predict.yaml`, default `runs/predict`).
+
+Typicky najdeš:
+- `*.counts.json` (IN/OUT pro třídy `0..3`)
+- `*.pred.mp4` (pokud `export.save_video: true`)
+- debug logy (pokud `debug: true`)
+
+---
+
+## Evaluace
+
+Konfigurace v `configs/eval.yaml`:
+- `gt_dir`: ground-truth `*.counts.json`
+- `runs_dir`: kde jsou predikční runy (např. `runs/predict`)
+- `out_dir`: kam uložit eval výstupy
+- `filters.*`: výběr backendů / variant / model_ids
+- `charts.enabled`: generování grafů
+
+Spuštění:
+
 ```bash
-python -m src.train
+uv run python -m counter.eval --config configs/eval.yaml
 ```
 
-## Metrics (eval)
-From `complete_results.csv`:
-- `gt_in`, `gt_out`: ground truth counts.
-- `pred_in`, `pred_out`: predicted counts.
-- `in_diff`, `out_diff`: prediction minus GT (positive = overcount).
+---
 
-From `scores_micro_macro.csv`:
-- `E_micro`: total relative error across all classes.
-- `Score_micro`: `1 - E_micro`.
-- `E_macro`: average relative error per class (equal weight).
-- `Score_macro`: `1 - E_macro`.
+## Praktické debug tipy
 
-From `tracking_miss_rate.csv`:
-- `tmr`: average relative error per class using `max(gt_total, pred_total)` as denom.
-- `tracking_accuracy`: `1 - tmr`.
+- Nejdřív si pusť `preview.enabled: true` a dej `preview.every_n_frames` třeba 20 → rychle uvidíš, jestli je čára OK.
+- U pretrained modelů vždycky ověř, že `mapping` odpovídá realitě modelu (COCO ID se u různých implementací občas liší v praxi).
+- Pokud tracking blbne, zkus dočasně `tracking.type: none` (oddělíš detekci od trackingu).
 
-From `diff_stats.csv`:
-- `mean`, `std` for `in_diff`/`out_diff` per class.
-
-YOLO val (when `run_model_eval: true` and `model_type: yolo`):
-- `map50`, `map50_95`, `precision`, `recall` in `yolo_val_metrics.csv`.
-- Per-class metrics in `yolo_class_metrics.csv`.
-- Confusion matrix plots in `yolo_plots/confusion_matrix.png` and `yolo_plots/confusion_matrix_norm.png`.
-
-RF-DETR eval (when `run_model_eval: true` and `model_type: rfdetr`):
-- Per-class metrics in `rfdetr_class_metrics.csv`.
-- Summary metrics in `rfdetr_metrics.csv`.
-- Confusion matrix plots in `rfdetr_plots/confusion_matrix.png` and `rfdetr_plots/confusion_matrix_norm.png`.

@@ -1,0 +1,18 @@
+﻿# Evaluation configuration
+gt_dir: data/counts_gt
+runs_dir: runs/predict
+out_dir: runs/eval
+
+only_completed: true
+rank_by: event_wape_total  # or video_mae_total
+
+videos_dir: ""  # leave empty if you do not want rate-based metrics
+
+filters:
+  run_ids: []
+  backends: [yolo]
+  variants: []
+  model_ids: []
+
+charts:
+  enabled: true
