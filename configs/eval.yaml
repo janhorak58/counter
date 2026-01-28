@@ -9,7 +9,7 @@ videos_dir: ""              # nech prázdné, pokud nechceš rate metriky
 
 filters:
   run_ids: []
-  backends: []
+  backends: [yolo]
   variants: []
   model_ids: []
 

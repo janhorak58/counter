@@ -1,25 +1,42 @@
-model_id: yolo11m_tuned
 
-videos_dir: data/videos
-videos: [vid16.mp4, vid17.mp4, vid18.mp4]
-device: cpu 
-
-line:
-  name: Line_1
-  start: [846, 404]
-  end: [1328, 456]
-greyzone_px: 20.0
+# configs/predict.yaml
+run_id: "local_predict"
+# model_id: "rfdetr_tuned/rfdetr_small_v6"   # musí existovat v models.yaml
+# model_id: "yolo_tuned/yolo8n_v2"   # musí existovat v models.yaml
+model_id: "yolo_pretrained/yolov8n"   # musí existovat v models.yaml
+output_dir: "runs/predict"
+device: "cpu"
 
 thresholds:
   conf: 0.35
-  iou: 0.35
+  iou: 0.50
 
 tracking:
-  type: bytetrack
-  params:
-    track_thresh: 0.25
-    match_thresh: 0.8
+  type: "bytetrack"          # "none" | "bytetrack"
+  tracker_yaml: "bytetrack.yaml"    # jen pro YOLO ultralytics (když chceš)
+  params: {}            # pro supervision ByteTrack (RF-DETR)
+
+videos_dir: "data/videos"
+videos:
+  - "vid19.mp4"
+
+probe_frames: 0
 
 export:
-  out_dir: runs/predict
-  save_video: false
+  save_video: true
+  save_raw: true
+  save_counts_json: true
+
+debug: true
+
+preview:
+  enabled: true
+  every_n_frames: 1
+  max_width: 1200
+
+line:
+  name: "main_line"
+  coords: [846, 404, 1328, 456]   # x1, y1, x2, y2
+  default_resolution: [1920, 1080] # width, height
+
+greyzone_px: 10

@@ -1,78 +1,158 @@
+# configs/models.yaml
 models:
-  yolov8s_tuned:
+  # -----------------
+  # YOLO tuned (4-class)
+  # -----------------
+  yolo_tuned/yolov8s_v13:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolov8s_v13/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  yolov8m_tuned:
+  yolo_tuned/yolov8m_v12:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolov8m_v12/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
-    
-  yolo11m_tuned:
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  yolo_tuned/yolo11m_v11:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolo11m_v11/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  yolo11l_tuned:
+  yolo_tuned/yolo11l_v11:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolo11l_v11/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  yolo26s_tuned:
+  yolo_tuned/yolo26s_v11:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolo26s_v11/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  yolo26l_tuned:
+  yolo_tuned/yolo26l_v11:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolo26l_v11/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  yolo26x_tuned:
+  yolo_tuned/yolo26x_v11:
     backend: yolo
     variant: tuned
     weights: models/yolo/v1/yolo26x_v11/weights/best.pt
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
-  rfdetr_large_tuned:
-    backend: rfdetr
+
+  yolo_tuned/yolov8n_v2:
+    backend: yolo
     variant: tuned
-    weights: models/rfdetr/v1/rfdetr_large_v3/checkpoint_best_total.pth
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
-
-  rfdetr_small_tuned:
-    backend: rfdetr
-    variant: tuned
-    weights: models/rfdetr/v1/rfdetr_small_v6/checkpoint_best_total.pth
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
-
-  rfdetr_medium_tuned:
-    backend: rfdetr
-    variant: tuned
-    weights: models/rfdetr/v1/rfdetr_medium_v2/checkpoint_best_total.pth
-    mapping_policy: tuned
-    class_map: {0: 0, 1: 1, 2: 2, 3: 3}
-
-  coco_pretrained_baseline:
+    weights: models\yolo\v0\yolov8n_v2\weights\best.pt
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+  # -----------------
+  # YOLO pretrained (COCO)
+  # -----------------
+  yolo_pretrained/yolov8m:
     backend: yolo
     variant: pretrained
     weights: yolov8m.pt
-    mapping_policy: coco_baseline
-    # COCO ids: person=0, bicycle=1, dog=16, skis=30
-    coco_ids: {person: 0, bicycle: 1, dog: 16, skis: 30}
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolov8n:
+    backend: yolo
+    variant: pretrained
+    weights: yolov8n.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+
+
+  # -----------------
+  # RF-DETR tuned (lokální checkpointy)
+  # -----------------
+  rfdetr_tuned/rfdetr_small_v6:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: small
+    weights: models/rfdetr/v1/rfdetr_small_v6/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_medium_v2:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: medium
+    weights: models/rfdetr/v1/rfdetr_medium_v2/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_large_v3:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: large
+    weights: models/rfdetr/v1/rfdetr_large_v3/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  # -----------------
+  # RF-DETR pretrained (bez HF)
+  # -----------------
+  rfdetr_pretrained/base:
+    backend: rfdetr
+    variant: pretrained
+    rfdetr_size: base
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
