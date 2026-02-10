@@ -108,6 +108,7 @@ def train(
     batch_size: int = 8,
     grad_accum_steps: int = 4,
     lr: float = 1e-4,
+    lr_encoder: float = 1.5e-4,
     weight_decay: float = 1e-4,
     imgsz: int = 640,
     device: str = "0",
@@ -119,6 +120,17 @@ def train(
     warmup_epochs: int = 5,
     checkpoint_interval: int = 10,
     use_ema: bool = True,
+    gradient_checkpointing: bool = False,
+    # Early stopping
+    early_stopping: bool = False,
+    early_stopping_patience: int = 10,
+    early_stopping_min_delta: float = 0.001,
+    early_stopping_use_ema: bool = False,
+    # Logging
+    tensorboard: bool = True,
+    wandb: bool = False,
+    wandb_project: str | None = None,
+    wandb_run: str | None = None,
     seed: int = 42,
     scratch_dir: Path | None = None,
 ):
@@ -231,8 +243,9 @@ def train(
     
     # Train
     print_info("Starting training...")
+    print_info("Note: RF-DETR uses built-in 'architecture augmentation' for regularization")
     print("")
-    
+
     try:
         model.train(
             dataset_dir=str(working_dataset_dir),
@@ -240,10 +253,22 @@ def train(
             batch_size=batch_size,
             grad_accum_steps=grad_accum_steps,
             lr=lr,
+            lr_encoder=lr_encoder,
             weight_decay=weight_decay,
             output_dir=str(working_output_dir),
             device=f"cuda:{device}" if device.isdigit() else device,
             num_workers=workers,
+            use_ema=use_ema,
+            gradient_checkpointing=gradient_checkpointing,
+            checkpoint_interval=checkpoint_interval,
+            early_stopping=early_stopping,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_use_ema=early_stopping_use_ema,
+            tensorboard=tensorboard,
+            wandb=wandb,
+            project=wandb_project,
+            run=wandb_run,
             seed=seed,
         )
     except TypeError as e:
@@ -255,6 +280,7 @@ def train(
             batch_size=batch_size,
             grad_accum_steps=grad_accum_steps,
             lr=lr,
+            weight_decay=weight_decay,
             output_dir=str(working_output_dir),
         )
     
@@ -309,11 +335,28 @@ Examples:
     parser.add_argument("--epochs", "-e", type=int, default=100, help="Number of epochs (default: 100)")
     parser.add_argument("--batch", "-b", type=int, default=8, help="Batch size (default: 8)")
     parser.add_argument("--grad-accum", type=int, default=4, help="Gradient accumulation steps (default: 4)")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 1e-4)")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Model learning rate (default: 1e-4)")
+    parser.add_argument("--lr-encoder", type=float, default=1.5e-4, help="Encoder learning rate (default: 1.5e-4)")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay (default: 1e-4)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size (default: 640)")
     parser.add_argument("--device", "-d", type=str, default="0", help="GPU device (default: 0)")
     parser.add_argument("--workers", "-w", type=int, default=4, help="Dataloader workers (default: 4)")
+    parser.add_argument("--warmup-epochs", type=int, default=5, help="Warmup epochs (default: 5)")
+    parser.add_argument("--checkpoint-interval", type=int, default=10, help="Save checkpoint every N epochs")
+    parser.add_argument("--use-ema", action="store_true", default=True, help="Use Exponential Moving Average")
+    parser.add_argument("--gradient-checkpointing", action="store_true", help="Enable gradient checkpointing")
+
+    # Early stopping
+    parser.add_argument("--early-stopping", action="store_true", help="Enable early stopping")
+    parser.add_argument("--early-stopping-patience", type=int, default=10, help="Early stopping patience")
+    parser.add_argument("--early-stopping-min-delta", type=float, default=0.001, help="Min improvement delta")
+    parser.add_argument("--early-stopping-use-ema", action="store_true", help="Use EMA for early stopping")
+
+    # Logging
+    parser.add_argument("--tensorboard", action="store_true", default=True, help="Enable TensorBoard logging")
+    parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
+    parser.add_argument("--wandb-project", type=str, default=None, help="W&B project name")
+    parser.add_argument("--wandb-run", type=str, default=None, help="W&B run name")
     
     # Output
     parser.add_argument("--project", "-p", type=str, default=str(DEFAULT_PROJECT), help="Project directory")
@@ -356,6 +399,7 @@ Examples:
         batch_size=args.batch,
         grad_accum_steps=args.grad_accum,
         lr=args.lr,
+        lr_encoder=args.lr_encoder,
         weight_decay=args.weight_decay,
         imgsz=args.imgsz,
         device=args.device,
@@ -364,6 +408,18 @@ Examples:
         name=args.name,
         resume=args.resume,
         dataset_dir=Path(args.dataset),
+        warmup_epochs=args.warmup_epochs,
+        checkpoint_interval=args.checkpoint_interval,
+        use_ema=args.use_ema,
+        gradient_checkpointing=args.gradient_checkpointing,
+        early_stopping=args.early_stopping,
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta,
+        early_stopping_use_ema=args.early_stopping_use_ema,
+        tensorboard=args.tensorboard,
+        wandb=args.wandb,
+        wandb_project=args.wandb_project,
+        wandb_run=args.wandb_run,
         seed=args.seed,
         scratch_dir=Path(args.scratch) if args.scratch else None,
     )

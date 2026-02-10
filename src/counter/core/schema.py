@@ -116,7 +116,6 @@ class EvalConfig(BaseModel):
 
     videos_dir: Optional[str] = None
 
-    rank_by: Literal["video_mae_total", "event_wape_total", "rate_mae_total"] = "event_wape_total"
 
     filters: EvalFiltersCfg = Field(default_factory=EvalFiltersCfg)
     charts: ChartsCfg = Field(default_factory=ChartsCfg)

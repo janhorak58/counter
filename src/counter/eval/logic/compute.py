@@ -266,12 +266,12 @@ def evaluate_one_run(
     wape_wmacro_gt_out = class_wape_weighted_macro_gt(sum_abs_err_out_cls, sum_gt_out_cls)
 
     # Headline score (direction-macro).
-    score_total_event_wape = float((wape_micro_in + wape_micro_out) / 2.0)
+    score_total_micro_wape = float((wape_micro_in + wape_micro_out) / 2.0)
 
     # Per-run: class-aware macro WAPE by class.
     class_wape_macro_in = class_wape_macro(sum_abs_err_in_cls, sum_gt_in_cls)
     class_wape_macro_out = class_wape_macro(sum_abs_err_out_cls, sum_gt_out_cls)
-    score_total_class_wape = float((class_wape_macro_in + class_wape_macro_out) / 2.0)
+    score_total_macro_wape = float((class_wape_macro_in + class_wape_macro_out) / 2.0)
 
     # Per-run: rate-based.
     if sum_duration_s > 0.0:
@@ -320,10 +320,10 @@ def evaluate_one_run(
         "wape_micro_out": float(wape_micro_out),
         "wape_wmacro_gt_in": float(wape_wmacro_gt_in),
         "wape_wmacro_gt_out": float(wape_wmacro_gt_out),
-        "score_total_event_wape": score_total_event_wape,
+        "score_total_micro_wape": score_total_micro_wape,
         "class_wape_macro_in": float(class_wape_macro_in),
         "class_wape_macro_out": float(class_wape_macro_out),
-        "score_total_class_wape": float(score_total_class_wape),
+        "score_total_macro_wape": float(score_total_macro_wape),
         "sum_duration_s": float(sum_duration_s) if sum_duration_s > 0 else "",
         "gt_in_per_h": float(gt_in_rate) if sum_duration_s else "",
         "pred_in_per_h": float(pred_in_rate) if sum_duration_s else "",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -74,31 +75,27 @@ def mk_runinfo_from_run_dir(run_dir: Path) -> Optional[PredictRunInfo]:
         status=status,
     )
 
+def _discover_predict_runs_recursive(p: Path) -> List[PredictRunInfo]:
+    out: List[PredictRunInfo] = []
+    for dirpath, dirnames, filenames in os.walk(p):
+        dirp = Path(dirpath)
+        if "run.json" in filenames and (dirp / "predict").exists():
+            info = mk_runinfo_from_run_dir(dirp)
+            if info:
+                out.append(info)
+    return out
+
 
 def discover_predict_runs(runs_dir: str | Path) -> List[PredictRunInfo]:
     """Discover prediction runs under the given directory."""
     p = Path(runs_dir)
     if not p.exists():
         return []
-
-    # Case 1: runs/<id> (contains run.json + predict/).
-    if (p / "run.json").exists() and (p / "predict").exists():
-        one = mk_runinfo_from_run_dir(p)
-        return [one] if one else []
-
-    # Case 2: runs/<id>/predict passed directly.
-    if p.name == "predict" and (p.parent / "run.json").exists():
-        one = mk_runinfo_from_run_dir(p.parent)
-        return [one] if one else []
-
-    # Case 3: runs/ directory.
-    out: List[PredictRunInfo] = []
-    for run_dir in sorted([x for x in p.iterdir() if x.is_dir()]):
-        info = mk_runinfo_from_run_dir(run_dir)
-        if info:
-            out.append(info)
-    return out
-
+    
+    # Go recursively and find run.json
+    if any("run.json" in filenames for _, _, filenames in os.walk(p)):
+        return _discover_predict_runs_recursive(p)
+    return []
 
 def passes_filters(run: PredictRunInfo, cfg: EvalConfig) -> bool:
     f = cfg.filters

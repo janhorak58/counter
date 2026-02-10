@@ -194,9 +194,9 @@ def export_summary_charts(
     # Leaderboards (per-run metrics).
     run_metric_fields = [
         score_field,
-        "score_total_event_wape",
+        "score_micro_wape",
         "score_total_video_mae",
-        "score_total_class_wape",
+        "score_macro_wape",
         "score_total_rate_mae",
         "wape_micro_in",
         "wape_micro_out",
@@ -440,9 +440,9 @@ def export_summary_charts(
 
     # Main set (3-5 key charts).
     main_fields = [
-        "score_total_event_wape",
+        "score_total_micro_wape",
         "score_total_video_mae",
-        "score_total_class_wape",
+        "score_total_macro_wape",
     ]
 
     for field in main_fields:
