@@ -200,14 +200,14 @@ def install_rfdetr_aug_patch_max(
         def __repr__(self):
             return f"{self.__class__.__name__}(p={self.p}, t={self.t})"
 
-    def _maybe_add_img_only(transforms: list, ctor_name: str, p: float, *args, **kwargs):
+    def _maybe_add_img_only(transforms: list, ctor_name: str, apply_p: float, *args, **kwargs):
         if tvT is None:
             return
         ctor = getattr(tvT, ctor_name, None)
         if ctor is None:
             return
         try:
-            transforms.append(ImgOnlyRandomApply(ctor(*args, **kwargs), p=p))
+            transforms.append(ImgOnlyRandomApply(ctor(*args, **kwargs), p=apply_p))
         except Exception:
             return
 
