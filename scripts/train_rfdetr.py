@@ -19,6 +19,8 @@ Pouziti:
 from __future__ import annotations
 
 import argparse
+import json
+import logging
 import os
 import random
 import shutil
@@ -515,32 +517,79 @@ def train(
         except Exception as e:
             print_warning(f"print-augs selhal: {e}")
 
-    # Print config
-    print_info(f"Model: RF-DETR {model_name}")
-    print_info(f"Run name: {name}")
-    print_info(f"Final output: {output_dir}")
-    print_info(f"Working output: {working_output_dir}")
-    print_info(f"Dataset: {working_dataset_dir}")
-    print_info(f"Epochs: {epochs}")
-    print_info(f"Batch size: {batch_size}")
-    print_info(f"Gradient accumulation: {grad_accum_steps}")
-    print_info(f"Effective batch size: {batch_size * grad_accum_steps}")
-    print_info(f"LR: {lr} | LR encoder: {lr_encoder} | WD: {weight_decay}")
-    print_info(f"Image size (resolution): {imgsz}")
-    print_info(f"Device: cuda:{device}")
-    print_info(f"Workers: {workers}")
-    print_info(f"TrainConfig: multi_scale={multi_scale}, expanded_scales={expanded_scales}, "
-               f"do_random_resize_via_padding={do_random_resize_via_padding}, square_resize_div_64={square_resize_div_64}")
-    print_info(f"Aug preset: {augs}")
+    # Save config to JSON
+    config = {
+        "model": model_name,
+        "run_name": name,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "grad_accum_steps": grad_accum_steps,
+        "effective_batch_size": batch_size * grad_accum_steps,
+        "lr": lr,
+        "lr_encoder": lr_encoder,
+        "weight_decay": weight_decay,
+        "imgsz": imgsz,
+        "device": device,
+        "workers": workers,
+        "warmup_epochs": warmup_epochs,
+        "checkpoint_interval": checkpoint_interval,
+        "use_ema": use_ema,
+        "gradient_checkpointing": gradient_checkpointing,
+        "multi_scale": multi_scale,
+        "expanded_scales": expanded_scales,
+        "do_random_resize_via_padding": do_random_resize_via_padding,
+        "square_resize_div_64": square_resize_div_64,
+        "early_stopping": early_stopping,
+        "early_stopping_patience": early_stopping_patience,
+        "early_stopping_min_delta": early_stopping_min_delta,
+        "early_stopping_use_ema": early_stopping_use_ema,
+        "augs": augs,
+        "aug_hflip_p": aug_hflip_p,
+        "aug_color_p": aug_color_p,
+        "aug_erasing_p": aug_erasing_p,
+        "aug_expand_p": aug_expand_p,
+        "aug_expand_ratio": aug_expand_ratio,
+        "aug_pad_max": aug_pad_max,
+        "seed": seed,
+        "dataset_dir": str(dataset_dir),
+        "output_dir": str(output_dir),
+    }
+
+    config_path = output_dir / "train_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    # Compact config print
+    print_header(f"RF-DETR {model_name.upper()} Training - {name}")
+    print(f"{'='*70}")
+    print(f"Model:        RF-DETR {model_name}")
+    print(f"Output:       {output_dir}")
+    print(f"Dataset:      {working_dataset_dir}")
+    print(f"{'='*70}")
+    print(f"Epochs:       {epochs}  |  Batch: {batch_size}x{grad_accum_steps} = {batch_size * grad_accum_steps}")
+    print(f"LR:           {lr:.2e}  |  LR Enc: {lr_encoder:.2e}  |  WD: {weight_decay:.2e}")
+    print(f"Image size:   {imgsz}  |  Workers: {workers}  |  Device: cuda:{device}")
+    print(f"{'='*70}")
+    print(f"Augmentations: {augs}")
     if augs == "max":
-        print_info(f"Aug params: hflip_p={aug_hflip_p}, color_p={aug_color_p}, erasing_p={aug_erasing_p}, "
-                   f"expand_p={aug_expand_p}, expand_ratio={aug_expand_ratio}, pad_max={aug_pad_max}")
+        print(f"  hflip={aug_hflip_p} color={aug_color_p} erasing={aug_erasing_p}")
+        print(f"  expand={aug_expand_p} (ratio={aug_expand_ratio}) pad_max={aug_pad_max}")
+    print(f"{'='*70}")
+    if early_stopping:
+        print(f"Early Stop:   patience={early_stopping_patience}  min_delta={early_stopping_min_delta}")
+        print(f"{'='*70}")
+    print(f"Config saved: {config_path}")
+    print(f"{'='*70}\n")
+
+    # Reduce verbosity from rfdetr library
+    logging.getLogger("rfdetr").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
 
     # Init model
-    print_info("Initializing model...")
+    print(f"Initializing model...")
     model_class = model_classes[model_name]
     if resume:
-        print_info(f"Resuming/pretrained from: {resume}")
+        print(f"Resuming from: {resume}")
         try:
             model = model_class(pretrained_weights=resume)  # older/newer variants
         except TypeError:
@@ -549,8 +598,9 @@ def train(
         model = model_class()
 
     # Train
-    print_info("Starting training...")
-    print("")
+    print(f"\n{'='*70}")
+    print(f"STARTING TRAINING")
+    print(f"{'='*70}\n")
 
     train_kwargs: dict[str, Any] = dict(
         dataset_dir=str(working_dataset_dir),
@@ -601,17 +651,36 @@ def train(
 
     # Copy results back from scratch
     if scratch_dir and working_output_dir != output_dir:
-        print_info(f"Copying results from scratch to {output_dir}...")
+        print(f"\n{'='*70}")
+        print(f"Copying results from scratch to {output_dir}...")
         if output_dir.exists():
             shutil.rmtree(output_dir)
         shutil.copytree(working_output_dir, output_dir)
-        print_info("Results copied successfully")
+        print(f"Results copied successfully")
 
-    print_header("Training Complete")
-    print_info(f"Results saved to: {output_dir}")
-    print_info("Output files:")
-    for f in sorted(output_dir.iterdir()):
-        print(f"  - {f.name}")
+    print(f"\n{'='*70}")
+    print(f"TRAINING COMPLETE")
+    print(f"{'='*70}")
+    print(f"Results: {output_dir}")
+
+    # Print key metrics if available
+    results_json = output_dir / "results.json"
+    if results_json.exists():
+        try:
+            with open(results_json) as f:
+                results = json.load(f)
+            if "test" in results:
+                test_results = results["test"]
+                print(f"\nFinal Metrics:")
+                if "coco_eval_bbox" in test_results:
+                    bbox = test_results["coco_eval_bbox"]
+                    print(f"  mAP:       {bbox[0]:.4f}")
+                    print(f"  mAP@50:    {bbox[1]:.4f}")
+                    print(f"  mAP@75:    {bbox[2]:.4f}")
+        except Exception:
+            pass
+
+    print(f"{'='*70}\n")
 
 
 # =============================================================================
