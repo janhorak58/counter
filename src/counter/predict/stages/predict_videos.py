@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from counter.predict.tracking.providers import TrackProvider
 from counter.predict.mapping.track_mapper import TrackMapper
 from counter.predict.counting.counter import TrackCounter
+from counter.predict.types import MappedTrack
 from counter.predict.visual.renderer import FrameRenderer
 
 try:  # pragma: no cover
@@ -28,11 +29,30 @@ def _discover_videos(videos_dir: Path) -> List[str]:
 
 
 def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
-    """Open OpenCV video writer for the requested path."""
+    """Open OpenCV video writer for the requested path.
+
+    Tries a small set of codec/container combinations to improve Linux support.
+    Returns (writer, actual_path, codec_tag).
+    """
     if cv2 is None:
         raise ImportError("OpenCV (cv2) is required for save_video=True")
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    return cv2.VideoWriter(str(path), fourcc, float(fps), size)
+    # Prefer MP4, but fall back to AVI codecs that are commonly available on Linux builds.
+    candidates = [
+        ("mp4v", ".mp4"),
+        ("avc1", ".mp4"),
+        ("XVID", ".avi"),
+        ("MJPG", ".avi"),
+    ]
+    errors = []
+    for tag, ext in candidates:
+        out_path = path if path.suffix.lower() == ext else path.with_suffix(ext)
+        fourcc = cv2.VideoWriter_fourcc(*tag)
+        writer = cv2.VideoWriter(str(out_path), fourcc, float(fps), size)
+        if writer.isOpened():
+            return writer, out_path, tag
+        errors.append(f"{tag}{ext}")
+        writer.release()
+    raise RuntimeError(f"OpenCV VideoWriter failed for: {', '.join(errors)}")
 
 
 def _scale_line(coords, src_w: int, src_h: int, dst_w: int, dst_h: int):
@@ -114,10 +134,12 @@ class PredictVideos:
                 {"video": vid, "fps": vinfo.fps, "frames": vinfo.frame_count, "size": [vinfo.width, vinfo.height]},
             )
 
+            all_mapped_tracks: Dict[int, MappedTrack] = {}
             for frame_idx, frame_bgr in iter_frames(str(video_path)):
                 raw_tracks = provider.update(frame_bgr)
                 mapped_tracks = mapper.map_tracks(raw_tracks)
-                counter.update(mapped_tracks)
+                all_mapped_tracks.update({int(tr.track_id): tr for tr in mapped_tracks})
+                counter.update(all_mapped_tracks.values())
 
                 # Overlay statistics on output or preview frames.
                 if cfg.save_video or preview_enabled:
@@ -131,6 +153,7 @@ class PredictVideos:
                         frame_idx=int(frame_idx),
                         fps=float(vinfo.fps) if vinfo.fps else None,
                         total_frames=int(vinfo.frame_count) if vinfo.frame_count else None,
+                        trajectories=counter.net.get_trajectories() if getattr(renderer, "show_trajectories", False) else None,
                     )
 
                 if writer is not None:

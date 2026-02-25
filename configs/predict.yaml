@@ -13,13 +13,13 @@ thresholds:
 
 tracking:
   type: "bytetrack"  # "none" | "bytetrack"
-  tracker_yaml: "bytetrack.yaml"  # YOLO-only (Ultralytics)
+  tracker_yaml: "tracker.bytetrack.yaml"  # YOLO-only (Ultralytics)
   params: {}  # Supervision ByteTrack params (RF-DETR)
 
 videos_dir: "data/videos"
 videos:
-  - "vid19.mp4"
-  - "vid4.mp4"
+  # - "vid19.mp4"
+  - "vid3.mp4"
 
 probe_frames: 0
 
@@ -31,13 +31,13 @@ export:
 debug: false
 
 preview:
-  enabled: false
-  every_n_frames: 20
+  enabled: true
+  every_n_frames: 5
   max_width: 1200
 
 line:
   name: "main_line"
-  coords: [846, 404, 1328, 456]  # x1, y1, x2, y2
+  coords: [727.0, 459.0, 1133.0, 549.0] # x1, y1, x2, y2
   default_resolution: [1920, 1080]  # width, height
 
 greyzone_px: 30

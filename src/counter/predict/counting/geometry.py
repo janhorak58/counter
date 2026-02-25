@@ -11,31 +11,37 @@ def bottom_center(bbox: BBoxXYXY) -> Tuple[float, float]:
     return (float(x1 + x2) / 2.0, float(y2))
 
 
-def _sign(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
-    """Compute the sign of the area for point-in-line tests."""
-    return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
-
-
 def classify_point(
     line: LineCoords,
     point: Tuple[float, float],
     vid_resolution: Tuple[int, int],
     line_base_resolution: Tuple[int, int],
+    greyzone_px: float = 0.0,
 ) -> Side:
     """Classify a point as IN/OUT/ON relative to a line in video coordinates."""
     x1, y1, x2, y2 = line
     vid_w, vid_h = vid_resolution
     base_w, base_h = line_base_resolution
-    x1 = x1 * vid_w / base_w
-    y1 = y1 * vid_h / base_h
-    x2 = x2 * vid_w / base_w
-    y2 = y2 * vid_h / base_h
+    if (vid_w, vid_h) != (base_w, base_h):
+        sx = vid_w / base_w
+        sy = vid_h / base_h
+        x1 *= sx
+        y1 *= sy
+        x2 *= sx
+        y2 *= sy
 
-    p1 = (x1, y1)
-    p2 = (x2, y2)
-    p3 = point
+    px, py = point
+    dx = x2 - x1
+    dy = y2 - y1
+    v = dx * (py - y1) - dy * (px - x1)
 
-    v = _sign(p1, p2, p3)
+    if greyzone_px > 0.0:
+        len2 = dx * dx + dy * dy
+        if len2 == 0.0:
+            return Side.ON
+        tol2 = greyzone_px * greyzone_px * len2
+        if v * v <= tol2:
+            return Side.ON
     if v > 0:
         return Side.IN
     if v < 0:

@@ -35,7 +35,7 @@ class InitRun:
         spec = registry.models[cfg.model_id]
 
         run_id = f"{_ts()}"
-        subpath = f"{spec.backend}_{spec.variant}__{cfg.model_id}"
+        subpath = f"{cfg.model_id}"
         run_root = ensure_dir(Path(cfg.export.out_dir) / subpath / run_id)
         predict_dir = ensure_dir(run_root / "predict")
 

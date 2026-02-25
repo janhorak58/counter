@@ -119,14 +119,38 @@ def train(
     optimizer: str = "auto",
     lr0: float = 0.01,
     lrf: float = 0.01,
+    momentum: float = 0.937,
+    weight_decay: float = 0.0005,
+    warmup_epochs: float = 3.0,
+    # Color/HSV augmentations
+    hsv_h: float = 0.015,
+    hsv_s: float = 0.7,
+    hsv_v: float = 0.4,
+    # Geometric augmentations
+    degrees: float = 0.0,
+    translate: float = 0.1,
+    scale: float = 0.5,
+    shear: float = 0.0,
+    perspective: float = 0.0,
+    # Flip augmentations
+    flipud: float = 0.0,
+    fliplr: float = 0.5,
+    # Advanced mixing augmentations
     mosaic: float = 1.0,
     mixup: float = 0.0,
     copy_paste: float = 0.0,
+    # Other augmentations
+    bgr: float = 0.0,
+    erasing: float = 0.4,
+    close_mosaic: int = 10,
+    auto_augment: str = "randaugment",
     augment: bool = True,
     cache: bool = False,
     exist_ok: bool = False,
     pretrained: bool = True,
     freeze: int | None = None,
+    amp: bool = True,
+    cos_lr: bool = False,
     extra_args: dict | None = None,
 ):
     """Run YOLO training."""
@@ -184,11 +208,35 @@ def train(
         "optimizer": optimizer,
         "lr0": lr0,
         "lrf": lrf,
+        "momentum": momentum,
+        "weight_decay": weight_decay,
+        "warmup_epochs": warmup_epochs,
+        # Color/HSV augmentations
+        "hsv_h": hsv_h,
+        "hsv_s": hsv_s,
+        "hsv_v": hsv_v,
+        # Geometric augmentations
+        "degrees": degrees,
+        "translate": translate,
+        "scale": scale,
+        "shear": shear,
+        "perspective": perspective,
+        # Flip augmentations
+        "flipud": flipud,
+        "fliplr": fliplr,
+        # Advanced mixing augmentations
         "mosaic": mosaic,
         "mixup": mixup,
         "copy_paste": copy_paste,
+        # Other augmentations
+        "bgr": bgr,
+        "erasing": erasing,
+        "close_mosaic": close_mosaic,
+        "auto_augment": auto_augment,
         "augment": augment,
         "cache": cache,
+        "amp": amp,
+        "cos_lr": cos_lr,
         "verbose": True,
         "save": True,
         "save_period": -1,  # save only best and last
@@ -262,16 +310,43 @@ Examples:
     # Resume
     parser.add_argument("--resume", "-r", type=str, default=None, help="Resume from checkpoint")
     
-    # Optimizer
+    # Optimizer & Training
     parser.add_argument("--optimizer", type=str, default="auto", help="Optimizer: SGD, Adam, AdamW, auto")
     parser.add_argument("--lr0", type=float, default=0.01, help="Initial learning rate")
     parser.add_argument("--lrf", type=float, default=0.01, help="Final learning rate factor")
+    parser.add_argument("--momentum", type=float, default=0.937, help="SGD momentum")
+    parser.add_argument("--weight-decay", type=float, default=0.0005, help="Optimizer weight decay")
+    parser.add_argument("--warmup-epochs", type=float, default=3.0, help="Warmup epochs")
     parser.add_argument("--patience", type=int, default=50, help="Early stopping patience")
-    
-    # Augmentation
+    parser.add_argument("--cos-lr", action="store_true", help="Use cosine LR scheduler")
+    parser.add_argument("--amp", action="store_true", default=True, help="Automatic Mixed Precision")
+
+    # Color/HSV Augmentation
+    parser.add_argument("--hsv-h", type=float, default=0.015, help="HSV-Hue augmentation (0.0-1.0)")
+    parser.add_argument("--hsv-s", type=float, default=0.7, help="HSV-Saturation augmentation (0.0-1.0)")
+    parser.add_argument("--hsv-v", type=float, default=0.4, help="HSV-Value augmentation (0.0-1.0)")
+
+    # Geometric Augmentation
+    parser.add_argument("--degrees", type=float, default=0.0, help="Image rotation (+/- deg)")
+    parser.add_argument("--translate", type=float, default=0.1, help="Image translation (+/- fraction)")
+    parser.add_argument("--scale", type=float, default=0.5, help="Image scale (+/- gain)")
+    parser.add_argument("--shear", type=float, default=0.0, help="Image shear (+/- deg)")
+    parser.add_argument("--perspective", type=float, default=0.0, help="Image perspective (0.0-0.001)")
+
+    # Flip Augmentation
+    parser.add_argument("--flipud", type=float, default=0.0, help="Image flip up-down (probability)")
+    parser.add_argument("--fliplr", type=float, default=0.5, help="Image flip left-right (probability)")
+
+    # Advanced Mixing Augmentation
     parser.add_argument("--mosaic", type=float, default=1.0, help="Mosaic augmentation (0.0-1.0)")
     parser.add_argument("--mixup", type=float, default=0.0, help="Mixup augmentation (0.0-1.0)")
     parser.add_argument("--copy-paste", type=float, default=0.0, help="Copy-paste augmentation (0.0-1.0)")
+
+    # Other Augmentation
+    parser.add_argument("--bgr", type=float, default=0.0, help="BGR channel swap probability")
+    parser.add_argument("--erasing", type=float, default=0.4, help="Random erasing probability (0-0.9)")
+    parser.add_argument("--close-mosaic", type=int, default=10, help="Disable mosaic last N epochs")
+    parser.add_argument("--auto-augment", type=str, default="randaugment", help="Auto augment policy")
     parser.add_argument("--no-augment", action="store_true", help="Disable augmentation")
     
     # Other
@@ -307,14 +382,38 @@ Examples:
         optimizer=args.optimizer,
         lr0=args.lr0,
         lrf=args.lrf,
+        momentum=args.momentum,
+        weight_decay=args.weight_decay,
+        warmup_epochs=args.warmup_epochs,
+        # Color/HSV augmentations
+        hsv_h=args.hsv_h,
+        hsv_s=args.hsv_s,
+        hsv_v=args.hsv_v,
+        # Geometric augmentations
+        degrees=args.degrees,
+        translate=args.translate,
+        scale=args.scale,
+        shear=args.shear,
+        perspective=args.perspective,
+        # Flip augmentations
+        flipud=args.flipud,
+        fliplr=args.fliplr,
+        # Advanced mixing augmentations
         mosaic=args.mosaic,
         mixup=args.mixup,
         copy_paste=args.copy_paste,
+        # Other augmentations
+        bgr=args.bgr,
+        erasing=args.erasing,
+        close_mosaic=args.close_mosaic,
+        auto_augment=args.auto_augment,
         augment=not args.no_augment,
         cache=args.cache,
         exist_ok=args.exist_ok,
         pretrained=not args.no_pretrained,
         freeze=args.freeze,
+        amp=args.amp,
+        cos_lr=args.cos_lr,
     )
 
 

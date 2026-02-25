@@ -23,8 +23,8 @@ def _make_rfdetr_model(model_size: str | None, weights: str | None):
         "small": RFDETRSmall,
         "medium": RFDETRMedium,
         "large": RFDETRLarge,
-        "xlarge": RFDETRLarge,
-        "2xlarge": RFDETRLarge,
+        "xlarge": RFDETRXLarge,
+        "2xlarge": RFDETR2XLarge,
     }.get(size)
 
     if cls is None:

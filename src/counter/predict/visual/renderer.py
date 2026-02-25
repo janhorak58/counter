@@ -8,6 +8,11 @@ try:  # pragma: no cover
 except Exception:  # pragma: no cover
     cv2 = None
 
+try:  # pragma: no cover
+    import numpy as np  # type: ignore
+except Exception:  # pragma: no cover
+    np = None
+
 from counter.core.types import CanonicalClass, LineCoords
 from counter.predict.mapping.pretrained import INTERMEDIATE_NAMES
 from counter.predict.types import MappedTrack, RawTrack
@@ -41,6 +46,7 @@ class FrameRenderer:
     show_stats: bool = True
     show_raw: bool = False
     show_dropped_raw: bool = False
+    show_trajectories: bool = True
 
     def render(
         self,
@@ -53,8 +59,9 @@ class FrameRenderer:
         fps: Optional[float] = None,
         raw_tracks: Optional[List[RawTrack]] = None,
         total_frames: Optional[int] = None,
+        trajectories: Optional[Dict[int, List[Tuple[float, float]]]] = None,
     ):
-        """Draw line, tracks, and counters onto the provided frame."""
+        """Draw line, tracks, counters, and optional trajectories onto the provided frame."""
         if cv2 is None:
             return frame_bgr
 
@@ -72,6 +79,17 @@ class FrameRenderer:
                 cv2.rectangle(frame_bgr, (bx1, by1), (bx2, by2), (0, 0, 255), 2)
                 txt = f"RAW_DROP | {rt.score:.2f} | id:{rt.track_id} | raw:{rt.raw_class_id}:{rt.raw_class_name}"
                 _put_text(frame_bgr, txt, (bx1, max(0, by1 - 6)), scale=0.5, thick=1)
+
+        # Trajectory overlay (last N bottom-center points per track).
+        if self.show_trajectories and trajectories:
+            for tid in mapped_ids:
+                pts = trajectories.get(int(tid))
+                if not pts or len(pts) < 2:
+                    continue
+                if np is None:
+                    continue
+                arr = np.array([[int(x), int(y)] for x, y in pts], dtype=np.int32).reshape((-1, 1, 2))
+                cv2.polylines(frame_bgr, [arr], isClosed=False, color=(255, 0, 0), thickness=3)
 
         if self.show_boxes:
             for tr in tracks:
