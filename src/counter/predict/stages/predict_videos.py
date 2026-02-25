@@ -126,11 +126,8 @@ class PredictVideos:
             writer = None
             out_video_path: Optional[Path] = None
             if cfg.save_video:
-                desired_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
-                writer, out_video_path, codec_tag = _open_writer(
-                    desired_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height)
-                )
-                print(f"Saving video to: {out_video_path} (codec={codec_tag})")
+                out_video_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
+                writer = _open_writer(out_video_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height))
 
             log(
                 "video_start",
