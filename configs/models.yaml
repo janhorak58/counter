@@ -89,6 +89,25 @@ models:
       cyclist: 2
       tourist_dog: 3
 
+  yolo_tuned/yolo11l_aug:
+    backend: yolo
+    variant: tuned
+    weights: models\yolo\v1\yolo11l_aug\weights\best.pt
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  yolo_tuned/yolo11m_aug:
+    backend: yolo
+    variant: tuned
+    weights: models\yolo\v1\yolo11m_aug\weights\best.pt
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
 
   # -----------------
   # RF-DETR tuned (local checkpoints)
@@ -284,6 +303,8 @@ models:
       cyclist: 1
       tourist_dog: 16
       skier: 30
+
+      
 
   # -----------------
   # RF-DETR pretrained
