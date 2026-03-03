@@ -6,7 +6,6 @@ from counter.core.schema import ModelSpecCfg
 from counter.predict.mapping.pretrained import CocoBaselineMapping
 from counter.predict.mapping.tuned import TunedMapping
 from counter.predict.mapping.track_mapper import TrackMapper
-from counter.core.types import CanonicalClass
 
 
 def make_mapper(*, spec: ModelSpecCfg, label_map: Optional[Dict[int, str]], log=None) -> TrackMapper:

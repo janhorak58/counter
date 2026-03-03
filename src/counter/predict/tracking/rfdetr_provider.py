@@ -10,7 +10,6 @@ import supervision as sv
 
 from rfdetr import RFDETRLarge, RFDETRMedium, RFDETRSmall, RFDETRNano, RFDETRXLarge, RFDETR2XLarge
 
-from counter.core.types import BBoxXYXY
 from counter.predict.tracking.providers import TrackProvider
 from counter.predict.types import RawTrack
 
@@ -54,7 +53,7 @@ class RfDetrTrackProvider(TrackProvider):
     tracking_type: str  # "none" | "bytetrack"
     tracking_params: dict[str, Any]
 
-    # Best-effort JIT/tracing speedup (often fails on Windows).
+    # Best-effort JIT/tracing speedup.
     optimize_for_inference: bool = True
 
     def __post_init__(self) -> None:

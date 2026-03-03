@@ -2,7 +2,6 @@
 import cv2
 import sys
 from pathlib import Path
-from typing import Tuple
 from counter.core.types import LineCoords
 
 def choose_line(video_path: Path) -> LineCoords:

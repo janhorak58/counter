@@ -12,8 +12,6 @@ from counter.core.pipeline.log import JsonlLogger
 def _ts() -> str:
     """Return timestamp used in run directory names."""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-
 @dataclass
 class InitRun:
     """Prepare run dirs + logger + load model spec."""

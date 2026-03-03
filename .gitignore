@@ -65,3 +65,9 @@ mess/
 *.csv
 
 *.egg-info/
+CLAUDE.md
+AGENTS.md
+TRAINING_LOG.md
+
+docs/
+configs/*

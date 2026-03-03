@@ -5,7 +5,7 @@ from typing import Dict, Optional, Tuple
 
 from counter.core.types import CanonicalClass
 from counter.predict.mapping.base import MappingPolicy
-from counter.core.schema import MappingCfg, ModelSpecCfg
+from counter.core.schema import MappingCfg
 
 # Intermediate class IDs for COCO-style mapping.
 PERSON = 100

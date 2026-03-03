@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from counter.core.schema import EvalConfig
 from counter.core.pipeline.base import PipelineRunner, StageContext

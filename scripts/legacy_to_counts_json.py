@@ -19,7 +19,7 @@ import platform
 import re
 import socket
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 
 
 VID_RE = re.compile(r"(vid\d+)", re.IGNORECASE)

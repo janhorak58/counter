@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Tuple
 
-from counter.core.schema import MappingCfg, ModelSpecCfg
+from counter.core.schema import MappingCfg
 
 
 class MappingPolicy(ABC):
