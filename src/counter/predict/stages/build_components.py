@@ -36,6 +36,7 @@ class BuildComponents:
             greyzone_px=float(cfg.greyzone_px),
             oscillation_window_frames=int(getattr(cfg, "oscillation_window_frames", 0)),
             trajectory_len=int(getattr(cfg, "trajectory_len", 40)),
+            class_vote_window_frames=int(getattr(cfg, "class_vote_window_frames", 30)),
             finalize_fn=mapper.finalize_counts,
             line_base_resolution=tuple(cfg.line.default_resolution),
             log=log,
