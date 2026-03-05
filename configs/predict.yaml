@@ -1,11 +1,11 @@
-﻿# Prediction configuration
-run_id: "tuned_rfdetr_small"
-model_id: "rfdetr_tuned/rfdetr_small_v6"
-# model_id: "yolo_tuned/yolo8n_v2"
-# model_id: "yolo_pretrained/yolov8m"
+# Prediction configuration
+run_id: "pred_run"
+model_id: "rfdetr_tuned/rfdetr_large_aug2"
+#model_id: "yolo_tuned/yolo11x_v2"
+#model_id: "yolo_pretrained/yolov5l"
 #model_id: "rfdetr_pretrained/small"
 output_dir: "runs/predict"
-device: "cpu"
+device: "cuda"
 
 thresholds:
   conf: 0.35
@@ -18,8 +18,9 @@ tracking:
 
 videos_dir: "data/videos"
 videos:
-  # - "vid19.mp4"
-  - "vid3.mp4"
+  - "vid16.mp4"
+  - "vid17.mp4"
+  - "vid18.mp4"
 
 probe_frames: 0
 
@@ -40,6 +41,8 @@ line:
   coords: [727.0, 459.0, 1133.0, 549.0] # x1, y1, x2, y2
   default_resolution: [1920, 1080]  # width, height
 
-greyzone_px: 30
+greyzone_px: 10
 
 
+oscillation_window_frames: 0
+trajectory_len: 40

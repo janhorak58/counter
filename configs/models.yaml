@@ -89,10 +89,11 @@ models:
       cyclist: 2
       tourist_dog: 3
 
+
   yolo_tuned/yolo11l_aug:
     backend: yolo
     variant: tuned
-    weights: models\yolo\v1\yolo11l_aug\weights\best.pt
+    weights: models/yolo/v1/yolo11l_heavy_aug_v1/weights/best.pt
     mapping: 
       tourist: 0
       skier: 1
@@ -102,7 +103,17 @@ models:
   yolo_tuned/yolo11m_aug:
     backend: yolo
     variant: tuned
-    weights: models\yolo\v1\yolo11m_aug\weights\best.pt
+    weights: models/yolo/v1/yolo11m_heavy_aug_v1/weights/best.pt
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  yolo_tuned/yolo11x_v2:
+    backend: yolo
+    variant: tuned
+    weights: models/yolo/v1/yolo11x_v2/weights/best.pt
     mapping: 
       tourist: 0
       skier: 1
@@ -112,6 +123,7 @@ models:
   # -----------------
   # RF-DETR tuned (local checkpoints)
   # -----------------
+
   rfdetr_tuned/rfdetr_small_v6:
     backend: rfdetr
     variant: tuned
@@ -144,6 +156,96 @@ models:
       skier: 1
       cyclist: 2
       tourist_dog: 3
+
+
+  rfdetr_tuned/rfdetr_small_v8:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: small
+    weights: models/rfdetr/v1/rfdetr_small_v8/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_medium_v4:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: medium
+    weights: models/rfdetr/v1/rfdetr_medium_v4/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_large_v7:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: large
+    weights: models/rfdetr/v1/rfdetr_large_v7/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_small_aug:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: small
+    weights: models/rfdetr/v1/rfdetr_small_v9/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_medium_aug:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: medium
+    weights: models/rfdetr/v1/rfdetr_medium_v5/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_large_aug:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: large
+    weights: models/rfdetr/v1/rfdetr_large_v8/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_large_aug2:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: large
+    weights: models/rfdetr/v1/rfdetr_large_v9/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
+  rfdetr_tuned/rfdetr_large_aug3:
+    backend: rfdetr
+    variant: tuned
+    rfdetr_size: large
+    weights: models/rfdetr/v1/rfdetr_large_v10/checkpoint_best_ema.pth
+    mapping: 
+      tourist: 0
+      skier: 1
+      cyclist: 2
+      tourist_dog: 3
+
 
   # =================
   # PRETRAINED MODELS
@@ -254,6 +356,7 @@ models:
       tourist_dog: 16
       skier: 30
 
+
   yolo_prtrained/yolo11n:
     backend: yolo
     variant: pretrained
@@ -304,7 +407,57 @@ models:
       tourist_dog: 16
       skier: 30
 
-      
+  yolo_prtrained/yolo26n:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26n.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26s:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26s.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26m:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26m.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26l:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26l.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26x:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26x.pt
+    mapping: 
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+
 
   # -----------------
   # RF-DETR pretrained
