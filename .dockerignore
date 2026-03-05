@@ -1,0 +1,24 @@
+.git
+.gitignore
+.gitatributes
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Large/local artifacts
+data/
+models/
+runs/
+mess/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.mp4
+*.zip
+
+# Local docs and notes
+CLAUDE.md
+TRAINING_LOG.md

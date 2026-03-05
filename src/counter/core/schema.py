@@ -85,14 +85,11 @@ class PredictConfig(BaseModel):
     preview: PreviewCfg = Field(default_factory=PreviewCfg)
     save_video: bool = True
 
-<<<<<<< Updated upstream
-=======
     
     oscillation_window_frames: int = 0
     trajectory_len: int = 40
     class_vote_window_frames: int = 30
 
->>>>>>> Stashed changes
 
 class ChartsCfg(BaseModel):
     """Optional chart generation settings for evaluation."""

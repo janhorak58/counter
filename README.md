@@ -37,6 +37,37 @@ uv run python -c "import counter; print(counter.__name__)"
 
 ---
 
+## Spuštění v Dockeru (alternativa k `uv`)
+
+Lokální způsob přes `uv` výše zůstává beze změny. Docker je jen druhá možnost.
+
+### 1) Build + start přes Docker Compose
+
+V kořeni repozitáře:
+
+```bash
+docker compose up --build
+```
+
+UI poběží na:
+
+```text
+http://localhost:8501
+```
+
+### 2) Běh na pozadí + stop
+
+```bash
+docker compose up -d --build
+docker compose down
+```
+
+Poznámky:
+- Compose mountuje jen runtime složky (`configs`, `data`, `models`, `runs`) a aplikaci uvnitř kontejneru spouští přes `uv`.
+- Pokud chceš image jen rebuiltnout: `docker compose build`.
+
+---
+
 ## Predikce / počítání
 
 Konfigurace:
