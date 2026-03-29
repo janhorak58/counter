@@ -357,7 +357,7 @@ models:
       skier: 30
 
 
-  yolo_prtrained/yolo11n:
+  yolo_pretrained/yolo11n:
     backend: yolo
     variant: pretrained
     weights: yolo11n.pt
@@ -407,7 +407,7 @@ models:
       tourist_dog: 16
       skier: 30
 
-  yolo_prtrained/yolo26n:
+  yolo_pretrained/yolo26n:
     backend: yolo
     variant: pretrained
     weights: yolo26n.pt

@@ -17,6 +17,18 @@ Ve výstupech a evaluaci se používají fixní ID:
 
 ## Instalace přes `uv`
 
+Pokud nemáte `uv` nainstalovaný:
+
+**Linux**
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell)*
+```
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
 V kořeni repozitáře (kde je `pyproject.toml`):
 
 ```bash
@@ -34,6 +46,12 @@ Test, že balíček žije:
 ```bash
 uv run python -c "import counter; print(counter.__name__)"
 ```
+
+GUI pro konfiguraci a predikci:
+
+```bash
+uv run streamlit run src/counter/ui/app.py
+``` 
 
 ---
 

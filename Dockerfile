@@ -19,12 +19,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
+# dependency layer
 COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# application code
 COPY src ./src
 COPY configs ./configs
 COPY tracker.bytetrack.yaml ./
 
-RUN uv sync --frozen --no-dev
+# final install of the project itself
+RUN uv sync --frozen --no-dev --no-editable
 
 EXPOSE 8501
 

@@ -17,9 +17,10 @@ def ensure_state_defaults() -> None:
 
     defaults: Dict[str, object] = {
         "ui_project_root": str(root),
-        "ui_predict_config_path": str(root / "configs/predict.yaml"),
+        "ui_predict_config_path": str(root / "configs/predict_ui.yaml"),
         "ui_eval_config_path": str(root / "configs/eval.yaml"),
-        "ui_models_config_path": str(root / "configs/models.yaml"),
+        "ui_models_config_path": str(root / "configs/models_ui.yaml"),
+        "ui_models_root": str(root / "models/ui"),
         "ui_videos_dir": str(root / "data/videos"),
         "ui_gt_dir": str(root / "data/counts_gt"),
         "ui_runs_predict_dir": str(root / "runs/predict"),

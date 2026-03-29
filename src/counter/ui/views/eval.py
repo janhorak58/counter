@@ -18,6 +18,7 @@ def _seed_eval_form_from_dict(cfg: Dict[str, Any]) -> None:
     st.session_state["eval_out_dir"] = str(cfg.get("out_dir", st.session_state.get("ui_runs_eval_dir", "runs/eval")))
     st.session_state["eval_only_completed"] = bool(cfg.get("only_completed", True))
     st.session_state["eval_videos_dir"] = str(cfg.get("videos_dir", ""))
+    st.session_state["eval_rank_by"] = str(cfg.get("rank_by", "video_mae_total"))
 
     filters = cfg.get("filters") or {}
     st.session_state["eval_filter_backends"] = list(filters.get("backends", []))
@@ -47,6 +48,7 @@ def _build_eval_dict() -> Dict[str, Any]:
         "out_dir": str(st.session_state.get("eval_out_dir", st.session_state.get("ui_runs_eval_dir", "runs/eval"))),
         "only_completed": bool(st.session_state.get("eval_only_completed", True)),
         "videos_dir": str(st.session_state.get("eval_videos_dir", "")),
+        "rank_by": str(st.session_state.get("eval_rank_by", "video_mae_total")),
         "filters": {
             "run_ids": _csv_to_list(st.session_state.get("eval_filter_run_ids", "")),
             "backends": list(st.session_state.get("eval_filter_backends", [])),
@@ -138,6 +140,16 @@ def render() -> None:
         st.text_input("out_dir", key="eval_out_dir")
         st.checkbox("only_completed", key="eval_only_completed")
         st.text_input("videos_dir (optional)", key="eval_videos_dir")
+        st.selectbox(
+            "rank_by",
+            options=[
+                "video_mae_total",
+                "micro_wape_total",
+                "macro_wape_total",
+                "rate_mae_total",
+            ],
+            key="eval_rank_by",
+        )
 
     with col2:
         st.multiselect("filters.backends", options=["yolo", "rfdetr"], key="eval_filter_backends")

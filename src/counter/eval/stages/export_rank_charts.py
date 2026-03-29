@@ -29,6 +29,7 @@ class RankExportCharts:
 
         export_json_bundle(
             out_root=out_root,
+            rank_by=cfg.rank_by,
             score_field=score_field,
             classes=[{"id": int(c), "name": n} for c, n in zip(classes, class_names)],
             ranked_runs=ranked,
@@ -37,9 +38,9 @@ class RankExportCharts:
             per_class=per_class_rows,
             notes={
                 "score_total_video_mae": "Avg MAE over (IN_total, OUT_total), each video equal weight.",
-                "score_micro_wape": "Avg class-aware (micro) WAPE over (IN, OUT). WAPE=sum_over_classes(|err|)/sum_over_classes(GT). Penalizes class swaps.",
+                "score_total_micro_wape": "Avg class-aware (micro) WAPE over (IN, OUT). WAPE=sum_over_classes(|err|)/sum_over_classes(GT). Penalizes class swaps.",
                 "score_total_rate_mae": "Avg abs error of passages/hour (IN & OUT). Needs durations.",
-                "score_macro_wape": "Avg macro-WAPE over classes (IN & OUT).",
+                "score_total_macro_wape": "Avg macro-WAPE over classes (IN & OUT).",
             },
         )
 

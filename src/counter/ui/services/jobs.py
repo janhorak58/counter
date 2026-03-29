@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import queue
+import signal
 import subprocess
 import threading
 import time
@@ -50,15 +51,20 @@ def start_job(
     if env_extra:
         env.update({str(k): str(v) for k, v in env_extra.items()})
 
-    proc = subprocess.Popen(
-        [str(x) for x in command],
-        cwd=str(cwd),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
+    popen_kwargs = {
+        "cwd": str(cwd),
+        "env": env,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "bufsize": 1,
+    }
+    if os.name == "posix":
+        popen_kwargs["start_new_session"] = True
+    elif os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+    proc = subprocess.Popen([str(x) for x in command], **popen_kwargs)
 
     q: queue.Queue[str] = queue.Queue()
     t = threading.Thread(target=_log_reader, args=(proc, q), daemon=True)
@@ -102,18 +108,32 @@ def cancel_job(job: JobHandle, *, timeout_s: float = 5.0) -> JobHandle:
         return poll_job(job)
 
     try:
-        job.process.terminate()
+        if os.name == "posix":
+            os.killpg(job.process.pid, signal.SIGTERM)
+        else:
+            job.process.terminate()
         job.process.wait(timeout=timeout_s)
     except Exception:
         try:
-            job.process.kill()
+            if os.name == "posix":
+                os.killpg(job.process.pid, signal.SIGKILL)
+            else:
+                job.process.kill()
+            job.process.wait(timeout=timeout_s)
         except Exception:
             pass
 
-    poll_job(job)
-    if job.status == "running":
-        job.status = "cancelled"
-        job.ended_at = time.time()
+    while True:
+        try:
+            line = job.log_queue.get_nowait()
+            job.logs.append(line)
+        except queue.Empty:
+            break
+
+    rc = job.process.poll()
+    job.exit_code = int(rc) if rc is not None else None
+    job.status = "cancelled"
+    job.ended_at = time.time()
 
     return job
 

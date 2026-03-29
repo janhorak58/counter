@@ -35,14 +35,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     cfg = load_predict_config(args.config)
-    print(cfg)
     if args.debug:
         cfg.debug = True
-        
+
     if args.probe_frames is not None:
         cfg.probe_frames = int(args.probe_frames)
 
-    print(cfg.debug)
     out = PredictPipeline(models_yaml=args.models, debug=cfg.debug).run(cfg)
     print(str(out))
 

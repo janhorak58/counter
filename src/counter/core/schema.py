@@ -84,6 +84,7 @@ class PredictConfig(BaseModel):
     greyzone_px: float = 0.0
     preview: PreviewCfg = Field(default_factory=PreviewCfg)
     save_video: bool = True
+    render_every_n_frames: int = 5
 
     
     oscillation_window_frames: int = 0
@@ -116,6 +117,14 @@ class EvalConfig(BaseModel):
     only_completed: bool = True
 
     videos_dir: Optional[str] = None
+    rank_by: Literal[
+        "video_mae_total",
+        "micro_wape_total",
+        "macro_wape_total",
+        "rate_mae_total",
+        "event_wape_total",
+        "class_wape_total",
+    ] = "video_mae_total"
 
 
     filters: EvalFiltersCfg = Field(default_factory=EvalFiltersCfg)
