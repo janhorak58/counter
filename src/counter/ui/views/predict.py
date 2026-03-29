@@ -448,11 +448,12 @@ def _render_model_upload(models_cfg_path: Path) -> None:
             )
         with c2:
             st.selectbox("Varianta", options=["tuned", "pretrained"], key="ui_upload_model_variant")
-            st.text_input(
-                "rfdetr_size (volitelné, pro RF-DETR)",
-                key="ui_upload_model_rfdetr_size",
-                placeholder="small / medium / large / xlarge",
-            )
+            if st.session_state.get("ui_upload_model_backend") == "rfdetr":
+                st.selectbox(
+                    "Velikost RF-DETR *",
+                    options=["nano", "small", "medium", "large", "xlarge", "2xlarge"],
+                    key="ui_upload_model_rfdetr_size",
+                )
 
         st.markdown("**Mapování tříd** (pro vlastní modely)")
         m1, m2, m3, m4 = st.columns(4)
@@ -482,6 +483,8 @@ def _render_model_upload(models_cfg_path: Path) -> None:
 
                     if not model_id:
                         st.error("Zadejte ID modelu.")
+                    elif backend == "rfdetr" and not rfdetr_size:
+                        st.error("Vyberte velikost RF-DETR modelu.")
                     else:
                         try:
                             mapping = {

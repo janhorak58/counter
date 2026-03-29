@@ -77,7 +77,12 @@ def render() -> None:
         st.selectbox("backend", options=["yolo", "rfdetr"], key="assets_model_backend")
         st.selectbox("variant", options=["tuned", "pretrained"], key="assets_model_variant")
         st.text_input("model_id", key="assets_model_id")
-        st.text_input("rfdetr_size (optional)", key="assets_model_size")
+        if st.session_state.get("assets_model_backend") == "rfdetr":
+            st.selectbox(
+                "rfdetr_size *",
+                options=["nano", "small", "medium", "large", "xlarge", "2xlarge"],
+                key="assets_model_size",
+            )
 
     with c2:
         st.checkbox("Set mapping", value=False, key="assets_model_mapping_enabled")
@@ -97,10 +102,13 @@ def render() -> None:
         backend = str(st.session_state.get("assets_model_backend", "yolo"))
         variant = str(st.session_state.get("assets_model_variant", "tuned"))
 
+        rfdetr_size = str(st.session_state.get("assets_model_size", "")).strip() or None
         if not model_id:
             st.error("model_id is required.")
         elif model_file is None:
             st.error("Please select a model file.")
+        elif backend == "rfdetr" and not rfdetr_size:
+            st.error("rfdetr_size is required for RF-DETR models.")
         else:
             try:
                 up = uploads.save_model_upload(
@@ -121,7 +129,7 @@ def render() -> None:
                     variant=variant,
                     weights_path=up.path,
                     mapping=mapping,
-                    rfdetr_size=str(st.session_state.get("assets_model_size", "")).strip() or None,
+                    rfdetr_size=rfdetr_size,
                 )
                 st.success(f"Uploaded: {up.path}")
                 st.success(f"Registered model_id='{model_id}' in {models_cfg_path}")
