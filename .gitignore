@@ -71,3 +71,4 @@ TRAINING_LOG.md
 
 docs/
 configs/*
+!configs/models.default.yaml

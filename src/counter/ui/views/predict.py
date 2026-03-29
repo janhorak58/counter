@@ -433,7 +433,7 @@ def _render_model_upload(models_cfg_path: Path) -> None:
     with st.expander("Nahrát vlastní váhy modelu", expanded=False):
         st.caption(
             "Nahrajte soubor s váhami modelu (.pt / .pth / .onnx). "
-            "Model se uloží do složky `models/ui/` a zaregistruje v `models_ui.yaml`."
+            "Model se uloží do složky `models/` a zaregistruje v `models.yaml`."
         )
         root = project_root()
         models_root = Path(st.session_state.get("ui_models_root", str(root / "models/ui")))
@@ -444,7 +444,7 @@ def _render_model_upload(models_cfg_path: Path) -> None:
             st.text_input(
                 "ID modelu (např. yolo_tuned/muj_model)",
                 key="ui_upload_model_id",
-                help="Bude použito jako klíč v models_ui.yaml a v dropdownu výběru modelu.",
+                help="Bude použito jako klíč v models.yaml a v dropdownu výběru modelu.",
             )
         with c2:
             st.selectbox("Varianta", options=["tuned", "pretrained"], key="ui_upload_model_variant")
@@ -1058,6 +1058,14 @@ def render() -> None:
 
     model_options: List[str] = []
     registry = None
+    if not models_cfg_path.exists():
+        models_cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        default_path = project_root() / "configs" / "models.default.yaml"
+        if default_path.exists():
+            import shutil
+            shutil.copy(default_path, models_cfg_path)
+        else:
+            models_cfg_path.write_text("models: {}\n", encoding="utf-8")
     try:
         registry = load_models_registry(models_cfg_path)
         model_options = sorted(registry.models.keys())
