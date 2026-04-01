@@ -22,6 +22,7 @@ dependencies = [
     "pyyaml",
     "rfdetr==1.4.0.post0",
     "supervision>=0.27.0",
+    "lap",
 ]
 
 [project.scripts]
