@@ -63,5 +63,11 @@ pbs_scripts_legacy/
 mess/
 *.pbs
 *.csv
-
+.claude
 *.egg-info/
+CLAUDE.md
+AGENTS.md
+TRAINING_LOG.md
+
+configs/*
+!configs/models.default.yaml

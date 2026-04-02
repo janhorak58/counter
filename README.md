@@ -1,145 +1,45 @@
-# Counter – video line-crossing object counter (YOLO / RF-DETR)
+# Bakalářská práce: Obrazová detekce návštěvníků na Jizerské magistrále
 
-Počítá průchody objektů přes zadanou čáru ve videu (IN/OUT). Pipeline: **detekce → tracking → line-crossing logika → counts.json + volitelně video export**.
+V rámci bakalářské práce obrazová detekce návštěvníků na Jizerské magistrále byl vytvořen systém pro detekci a počítání návštěvníků na základě videí z Jizerské magistrály.
 
-## Kanonické třídy (výstup)
-Ve výstupech a evaluaci se používají fixní ID:
+## Rychlý start
 
-- `0` = `TOURIST`
-- `1` = `SKIER`
-- `2` = `CYCLIST`
-- `3` = `TOURIST_DOG`
+### Požadavky
 
-> U **tuned** modelů se očekává, že model už predikuje tyhle 4 třídy (přímo nebo přes mapping).  
-> U **pretrained (COCO)** se používá “baseline” mapování (person/bicycle/dog/skis) + jednoduchá heuristika.
+- [Python 3.10+](https://www.python.org/downloads/)
+- [Git](https://git-scm.com/downloads)
+- [uv](https://github.com/astral-sh/uv) — správce prostředí pro Python
 
----
-
-## Instalace přes `uv`
-
-V kořeni repozitáře (kde je `pyproject.toml`):
-
+### Instalace `uv`
+#### macOS / Linux
 ```bash
-uv venv
-# Windows:
-# .venv\Scripts\activate
-# Linux/macOS:
-# source .venv/bin/activate
-
-uv pip install -e .
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+#### Windows (PowerShell)
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Test, že balíček žije:
+Po instalaci `uv` zavřete a znovu otevřete terminál.
 
+#### Spuštění uživatelského rozhraní
 ```bash
-uv run python -c "import counter; print(counter.__name__)"
+git clone https://github.com/janhorak58/counter.git
+cd counter
+uv sync
+uv run counter-ui
 ```
 
----
+### Video návod
+Podívejte se na krátký video návod od spuštění rozhraní po kontrolu výsledků.
 
-## Predikce / počítání
+[![Video návod: Jak spustit webové rozhraní pro provedení predikce na videu](./docs/assets/thumbnail.png)](https://youtu.be/64PHaxcjUcU)
 
-Konfigurace:
-- `configs/predict.yaml` – co se má počítat (video, čára, thresholdy, export, preview)
-- `configs/models.yaml` – registry modelů + mapping
+Podrobný postup je popsán v [návodu k webovému rozhraní](./docs/03_navody/webove_rozhrani/index.md).
 
-Spuštění:
-
-```bash
-uv run python -m counter.predict --config configs/predict.yaml --models configs/models.yaml
-```
-
-### Nejdůležitější položky v `configs/predict.yaml`
-- `model_id`: klíč z `configs/models.yaml` (např. `rfdetr_pretrained/small`)
-- `device`: `cpu` / `cuda:0`
-- `videos_dir` + `videos`: vstupní soubory
-- `line.coords`: `[x1, y1, x2, y2]` v pixelech
-- `line.default_resolution`: základní rozlišení, ve kterém byly coords nakreslené (automaticky se škáluje)
-- `greyzone_px`: tolerance okolo čáry (omezuje “kmitání”)
-- `thresholds.conf` / `thresholds.iou`
-- `tracking.type`: `none` | `bytetrack`
-- `export.*`: ukládání výstupů (video/raw/counts)
-- `preview.*`: živý náhled
-
----
-
-## Model registry (`configs/models.yaml`)
-
-Každý model má:
-- `backend`: `yolo` nebo `rfdetr`
-- `variant`: `tuned` nebo `pretrained`
-- `weights`: cesta / název weights
-- `mapping`: význam závisí na variantě
-
-### Tuned modely
-Mapping je **raw_class_id → kanonická třída** (typicky už 0..3):
-
-```yaml
-mapping:
-  tourist: 0
-  skier: 1
-  cyclist: 2
-  tourist_dog: 3
-```
-
-### Pretrained (COCO) modely
-Mapping říká, jaké raw ID odpovídá COCO třídám, které používáme jako baseline:
-
-- `tourist` = **person**
-- `cyclist` = **bicycle**
-- `tourist_dog` = **dog**
-- `skier` = **skis**
-
-Příklad (RF-DETR COCO):
-```yaml
-mapping:
-  tourist: 1      # person
-  cyclist: 2      # bicycle
-  tourist_dog: 18 # dog
-  skier: 35       # skis
-```
-
-Heuristika (baseline) typicky dělá:
-- `cyclist = bicycle`
-- `skier = skis`
-- `tourist = max(person - bicycle - skis, 0)`
-- `tourist_dog = dog`
-
-> Pokud ti “nesedí třídy”, není to magie: jen máš špatně `mapping` pro daný pretrained model.
-
----
-
-## Výstupy
-
-Predikce ukládá do `output_dir` (v `configs/predict.yaml`, default `runs/predict`).
-
-Typicky najdeš:
-- `*.counts.json` (IN/OUT pro třídy `0..3`)
-- `*.pred.mp4` (pokud `export.save_video: true`)
-- debug logy (pokud `debug: true`)
-
----
-
-## Evaluace
-
-Konfigurace v `configs/eval.yaml`:
-- `gt_dir`: ground-truth `*.counts.json`
-- `runs_dir`: kde jsou predikční runy (např. `runs/predict`)
-- `out_dir`: kam uložit eval výstupy
-- `filters.*`: výběr backendů / variant / model_ids
-- `charts.enabled`: generování grafů
-
-Spuštění:
-
-```bash
-uv run python -m counter.eval --config configs/eval.yaml
-```
-
----
-
-## Praktické debug tipy
-
-- Nejdřív si pusť `preview.enabled: true` a dej `preview.every_n_frames` třeba 20 → rychle uvidíš, jestli je čára OK.
-- U pretrained modelů vždycky ověř, že `mapping` odpovídá realitě modelu (COCO ID se u různých implementací občas liší v praxi).
-- Pokud tracking blbne, zkus dočasně `tracking.type: none` (oddělíš detekci od trackingu).
+## Obsah
+- [Koncept](./docs/02_koncept/01_cil_reseni.md)
+- [Návod: webové rozhraní pro predikci](./docs/03_navody/webove_rozhrani/index.md)
+- [Návod: evaluace výsledků](./docs/03_navody/02_evaluace.md)
+- [Technická dokumentace](./docs/04_architektura/index.md)
 

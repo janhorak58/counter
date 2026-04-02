@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from counter.core.io import dump_json
 

@@ -28,6 +28,14 @@ class TrackState:
     net_state: NetState = NetState.UNKNOWN
 
     voted_class_id: Optional[int] = None
+    class_history: Deque[int] = field(default_factory=deque)
+
+    # If the object has been counted away from its initial side, remember direction and frame.
+    counted_dir: Optional[str] = None  # 'in' | 'out'
+    counted_frame: Optional[int] = None
+
+    # Last N points (bottom-center), for debug rendering.
+    history: Deque[Tuple[float, float]] = field(default_factory=deque)
 
     # If the object has been counted away from its initial side, remember direction and frame.
     counted_dir: Optional[str] = None  # 'in' | 'out'
@@ -37,8 +45,28 @@ class TrackState:
     history: Deque[Tuple[float, float]] = field(default_factory=deque)
 
     def vote_class(self, class_id: int) -> None:
-        if self.voted_class_id is None:
-            self.voted_class_id = int(class_id)
+        """Update rolling class vote and keep current majority as voted_class_id.
+
+        Tie-breaker: prefer the most recent class among tied candidates.
+        """
+        cid = int(class_id)
+        self.class_history.append(cid)
+
+        counts: Dict[int, int] = {}
+        for x in self.class_history:
+            counts[int(x)] = int(counts.get(int(x), 0) + 1)
+
+        if not counts:
+            self.voted_class_id = cid
+            return
+
+        best = max(counts.values())
+        tied = {k for k, v in counts.items() if v == best}
+        for x in reversed(self.class_history):
+            if int(x) in tied:
+                self.voted_class_id = int(x)
+                return
+        self.voted_class_id = cid
 
 
 @dataclass
@@ -62,6 +90,7 @@ class NetStateCounter:
 
     oscillation_window_frames: int = 0
     trajectory_len: int = 40
+    class_vote_window_frames: int = 30
 
     # Internal per-track state.
     states: Dict[int, TrackState] = field(default_factory=dict)
@@ -92,6 +121,7 @@ class NetStateCounter:
         if st is None:
             st = TrackState()
             st.history = deque(maxlen=int(self.trajectory_len))
+            st.class_history = deque(maxlen=max(1, int(self.class_vote_window_frames)))
             self.states[tid] = st
 
         st.vote_class(int(class_id))

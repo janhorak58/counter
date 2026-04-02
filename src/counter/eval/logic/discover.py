@@ -86,16 +86,42 @@ def _discover_predict_runs_recursive(p: Path) -> List[PredictRunInfo]:
     return out
 
 
+def _discover_predict_runs_recursive(p: Path) -> List[PredictRunInfo]:
+    out: List[PredictRunInfo] = []
+    for dirpath, dirnames, filenames in os.walk(p):
+        dirp = Path(dirpath)
+        if "run.json" in filenames and (dirp / "predict").exists():
+            info = mk_runinfo_from_run_dir(dirp)
+            if info:
+                out.append(info)
+    return out
+
+
 def discover_predict_runs(runs_dir: str | Path) -> List[PredictRunInfo]:
     """Discover prediction runs under the given directory."""
     p = Path(runs_dir)
     if not p.exists():
         return []
-    
-    # Go recursively and find run.json
+
+    if p.is_dir() and p.name == "predict":
+        run_json_path = p.parent / "run.json"
+        if run_json_path.exists():
+            info = mk_runinfo_from_run_dir(p.parent)
+            return [info] if info else []
+
+        if any("run.json" in filenames for _, _, filenames in os.walk(p)):
+            return _discover_predict_runs_recursive(p)
+        return []
+
+    info = mk_runinfo_from_run_dir(p)
+    if info is not None:
+        return [info]
+
+    # Go recursively and find run.json.
     if any("run.json" in filenames for _, _, filenames in os.walk(p)):
         return _discover_predict_runs_recursive(p)
     return []
+
 
 def passes_filters(run: PredictRunInfo, cfg: EvalConfig) -> bool:
     f = cfg.filters

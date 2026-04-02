@@ -1,134 +1,7 @@
-﻿# Model registry
+# Default model registry — contains pretrained baselines available without local checkpoints.
+# This file is copied to configs/models.yaml on first launch if that file does not exist.
+# Edit models.yaml (not this file) to add your own tuned models.
 models:
-
-  # =================
-  # TUNED MODELS
-  # =================
-
-  # -----------------
-  # YOLO tuned
-  # -----------------
-  yolo_tuned/yolov8s_v13:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolov8s_v13/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolov8m_v12:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolov8m_v12/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolo11m_v11:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolo11m_v11/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolo11l_v11:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolo11l_v11/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolo26s_v11:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolo26s_v11/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolo26l_v11:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolo26l_v11/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  yolo_tuned/yolo26x_v11:
-    backend: yolo
-    variant: tuned
-    weights: models/yolo/v1/yolo26x_v11/weights/best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-
-  yolo_tuned/yolov8n_v2:
-    backend: yolo
-    variant: tuned
-    weights: models\yolo\v0\yolov8n_v2\weights\best.pt
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-
-  # -----------------
-  # RF-DETR tuned (local checkpoints)
-  # -----------------
-  rfdetr_tuned/rfdetr_small_v6:
-    backend: rfdetr
-    variant: tuned
-    rfdetr_size: small
-    weights: models/rfdetr/v1/rfdetr_small_v6/checkpoint_best_ema.pth
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  rfdetr_tuned/rfdetr_medium_v2:
-    backend: rfdetr
-    variant: tuned
-    rfdetr_size: medium
-    weights: models/rfdetr/v1/rfdetr_medium_v2/checkpoint_best_ema.pth
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  rfdetr_tuned/rfdetr_large_v3:
-    backend: rfdetr
-    variant: tuned
-    rfdetr_size: large
-    weights: models/rfdetr/v1/rfdetr_large_v3/checkpoint_best_ema.pth
-    mapping: 
-      tourist: 0
-      skier: 1
-      cyclist: 2
-      tourist_dog: 3
-
-  # =================
-  # PRETRAINED MODELS
-  # =================
 
   # -----------------
   # YOLO pretrained (COCO)
@@ -138,7 +11,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov5n.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -148,7 +21,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov5s.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -158,7 +31,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov5m.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -167,8 +40,8 @@ models:
   yolo_pretrained/yolov5l:
     backend: yolo
     variant: pretrained
-    weights: yolov5l.pt 
-    mapping: 
+    weights: yolov5l.pt
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -178,18 +51,17 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov5x.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
       skier: 30
 
-
   yolo_pretrained/yolov8n:
     backend: yolo
     variant: pretrained
     weights: yolov8n.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -199,7 +71,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov8s.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -209,7 +81,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov8m.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -219,7 +91,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov8l.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -229,17 +101,17 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolov8x.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
       skier: 30
 
-  yolo_prtrained/yolo11n:
+  yolo_pretrained/yolo11n:
     backend: yolo
     variant: pretrained
     weights: yolo11n.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -249,7 +121,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolo11s.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -259,7 +131,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolo11m.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -269,7 +141,7 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolo11l.pt
-    mapping: 
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -279,7 +151,57 @@ models:
     backend: yolo
     variant: pretrained
     weights: yolo11x.pt
-    mapping: 
+    mapping:
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26n:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26n.pt
+    mapping:
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26s:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26s.pt
+    mapping:
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26m:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26m.pt
+    mapping:
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26l:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26l.pt
+    mapping:
+      tourist: 0
+      cyclist: 1
+      tourist_dog: 16
+      skier: 30
+
+  yolo_pretrained/yolo26x:
+    backend: yolo
+    variant: pretrained
+    weights: yolo26x.pt
+    mapping:
       tourist: 0
       cyclist: 1
       tourist_dog: 16
@@ -293,7 +215,7 @@ models:
     backend: rfdetr
     variant: pretrained
     rfdetr_size: nano
-    mapping: 
+    mapping:
       tourist: 1
       cyclist: 2
       tourist_dog: 18
@@ -303,7 +225,7 @@ models:
     backend: rfdetr
     variant: pretrained
     rfdetr_size: small
-    mapping: 
+    mapping:
       tourist: 1
       cyclist: 2
       tourist_dog: 18
@@ -338,4 +260,3 @@ models:
       cyclist: 2
       tourist_dog: 18
       skier: 35
-

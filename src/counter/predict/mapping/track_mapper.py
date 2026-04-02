@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-from counter.core.schema import MappingCfg, ModelSpecCfg
 from counter.predict.mapping.base import MappingPolicy
 from counter.predict.types import MappedTrack, RawTrack
 

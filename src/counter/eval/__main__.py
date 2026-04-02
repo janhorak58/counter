@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from counter.core.config import load_eval_config
 from counter.eval.pipeline import EvalPipeline

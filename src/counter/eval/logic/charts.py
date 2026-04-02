@@ -21,6 +21,18 @@ def _sort_labels_values(labels: Sequence[str], values: Sequence[float]) -> tuple
     return labs, vals
 
 
+def _dedupe(items: Sequence[str]) -> list[str]:
+    """Remove duplicates while preserving input order."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
 def _ensure_parent(path: Union[str, Path]) -> Path:
     """Ensure parent directory exists and return the Path."""
     p = Path(path)
@@ -192,11 +204,11 @@ def export_summary_charts(
     labels = [str(r["model_id"]) for r in ranked_runs]
 
     # Leaderboards (per-run metrics).
-    run_metric_fields = [
+    run_metric_fields = _dedupe([
         score_field,
-        "score_micro_wape",
         "score_total_video_mae",
-        "score_macro_wape",
+        "score_total_micro_wape",
+        "score_total_macro_wape",
         "score_total_rate_mae",
         "wape_micro_in",
         "wape_micro_out",
@@ -212,11 +224,7 @@ def export_summary_charts(
         "rmse_out_total",
         "mae_in_total_counts",
         "mae_out_total_counts",
-    ]
-
-    # De-dup while preserving order.
-    seen = set()
-    run_metric_fields = [f for f in run_metric_fields if not (f in seen or seen.add(f))]
+    ])
 
     for field in run_metric_fields:
         # Skip if field is not present at all.
@@ -440,12 +448,13 @@ def export_summary_charts(
 
     # Main set (3-5 key charts).
     main_fields = [
+        score_field,
         "score_total_micro_wape",
         "score_total_video_mae",
         "score_total_macro_wape",
     ]
 
-    for field in main_fields:
+    for field in _dedupe(main_fields):
         if any(field in r for r in ranked_runs):
             vals = [float(r.get(field, 0.0) or 0.0) for r in ranked_runs]
             labs_sorted, vals_sorted = _sort_labels_values(labels, vals)

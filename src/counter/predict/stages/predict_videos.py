@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Dict, List, Optional
 
 from counter.predict.tracking.providers import TrackProvider
@@ -38,8 +40,9 @@ def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
         raise ImportError("OpenCV (cv2) is required for save_video=True")
     # Prefer MP4, but fall back to AVI codecs that are commonly available on Linux builds.
     candidates = [
-        ("mp4v", ".mp4"),
         ("avc1", ".mp4"),
+        ("H264", ".mp4"),
+        ("mp4v", ".mp4"),
         ("XVID", ".avi"),
         ("MJPG", ".avi"),
     ]
@@ -53,6 +56,46 @@ def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
         errors.append(f"{tag}{ext}")
         writer.release()
     raise RuntimeError(f"OpenCV VideoWriter failed for: {', '.join(errors)}")
+
+
+def _reencode_for_browser(path: Path) -> Path:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None or not path.exists():
+        return path
+
+    out_path = path.with_suffix(".browser.mp4")
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(path),
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(out_path),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except Exception:
+        return path
+
+    if proc.returncode != 0 or not out_path.exists():
+        try:
+            out_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return path
+
+    try:
+        path.unlink(missing_ok=True)
+    except Exception:
+        pass
+    out_path.replace(path)
+    return path
 
 
 def _scale_line(coords, src_w: int, src_h: int, dst_w: int, dst_h: int):
@@ -100,6 +143,7 @@ class PredictVideos:
         preview_enabled = bool(cfg.preview.enabled)
         preview_every = int(cfg.preview.every_n_frames or 1)
         preview_max_w = int(cfg.preview.max_width or 0)
+        render_every = max(1, int(getattr(cfg, "render_every_n_frames", 5) or 1))
 
         for vid in videos:
             video_path = videos_dir / vid
@@ -127,11 +171,20 @@ class PredictVideos:
             out_video_path: Optional[Path] = None
             if cfg.save_video:
                 out_video_path = predict_dir / f"{Path(vid).stem}.pred.mp4"
-                writer = _open_writer(out_video_path, fps=vinfo.fps or 25.0, size=(vinfo.width, vinfo.height))
-
+                writer, out_video_path, _codec_tag = _open_writer(
+                    out_video_path,
+                    fps=(vinfo.fps or 25.0) / float(render_every),
+                    size=(vinfo.width, vinfo.height),
+                )
             log(
                 "video_start",
-                {"video": vid, "fps": vinfo.fps, "frames": vinfo.frame_count, "size": [vinfo.width, vinfo.height]},
+                {
+                    "video": vid,
+                    "fps": vinfo.fps,
+                    "frames": vinfo.frame_count,
+                    "size": [vinfo.width, vinfo.height],
+                    "render_every_n_frames": render_every,
+                },
             )
 
             all_mapped_tracks: Dict[int, MappedTrack] = {}
@@ -142,7 +195,9 @@ class PredictVideos:
                 counter.update(all_mapped_tracks.values())
 
                 # Overlay statistics on output or preview frames.
-                if cfg.save_video or preview_enabled:
+                should_render_frame = (frame_idx % render_every) == 0
+
+                if (cfg.save_video and should_render_frame) or preview_enabled:
                     in_c, out_c = counter.snapshot_counts()
                     renderer.render(
                         frame_bgr,
@@ -156,7 +211,7 @@ class PredictVideos:
                         trajectories=counter.net.get_trajectories() if getattr(renderer, "show_trajectories", False) else None,
                     )
 
-                if writer is not None:
+                if writer is not None and should_render_frame:
                     writer.write(frame_bgr)
 
                 if preview_enabled and cv2 is not None and (frame_idx % preview_every == 0):
@@ -181,6 +236,8 @@ class PredictVideos:
 
             if writer is not None:
                 writer.release()
+                if out_video_path is not None:
+                    out_video_path = _reencode_for_browser(out_video_path)
 
             if preview_enabled and cv2 is not None:
                 cv2.destroyAllWindows()

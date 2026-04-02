@@ -11,15 +11,23 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "opencv-python",
+    "pillow",
+    "plotly",
+    "pandas",
+    "pydantic>=2.0",
+    "streamlit",
+    "streamlit-drawable-canvas",
     "torch",
     "ultralytics>=8.0.0",
     "pyyaml",
     "rfdetr==1.4.0.post0",
     "supervision>=0.27.0",
+    "lap",
 ]
 
 [project.scripts]
 counter = "counter.cli:main"
+counter-ui = "counter.ui.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

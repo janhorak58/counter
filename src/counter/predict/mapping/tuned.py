@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
-from counter.core.schema import MappingCfg, ModelSpecCfg
+from counter.core.schema import MappingCfg
 from counter.predict.mapping.base import MappingPolicy
 
 
