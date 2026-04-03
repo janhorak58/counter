@@ -1156,7 +1156,7 @@ def render() -> None:
                 encoding="utf-8",
                 suffix=".yaml",
                 prefix="counter_ui_predict_",
-                dir="/tmp",
+                dir=tempfile.gettempdir(),
                 delete=False,
             ) as fh:
                 fh.write(yaml_text)

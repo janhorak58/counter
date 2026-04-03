@@ -222,7 +222,7 @@ def render() -> None:
                     encoding="utf-8",
                     suffix=".yaml",
                     prefix="counter_ui_eval_",
-                    dir="/tmp",
+                    dir=tempfile.gettempdir(),
                     delete=False,
                 ) as f:
                     f.write(st.session_state["ui_eval_yaml_text"])
