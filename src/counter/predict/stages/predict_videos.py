@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -38,14 +39,22 @@ def _open_writer(path: Path, *, fps: float, size: tuple[int, int]):
     """
     if cv2 is None:
         raise ImportError("OpenCV (cv2) is required for save_video=True")
-    # Prefer MP4, but fall back to AVI codecs that are commonly available on Linux builds.
-    candidates = [
-        ("avc1", ".mp4"),
-        ("H264", ".mp4"),
-        ("mp4v", ".mp4"),
-        ("XVID", ".avi"),
-        ("MJPG", ".avi"),
-    ]
+    if os.name == "nt":
+        candidates = [
+            ("mp4v", ".mp4"),
+            ("XVID", ".avi"),
+            ("MJPG", ".avi"),
+            ("avc1", ".mp4"),
+            ("H264", ".mp4"),
+        ]
+    else:
+        candidates = [
+            ("avc1", ".mp4"),
+            ("H264", ".mp4"),
+            ("mp4v", ".mp4"),
+            ("XVID", ".avi"),
+            ("MJPG", ".avi"),
+        ]
     errors = []
     for tag, ext in candidates:
         out_path = path if path.suffix.lower() == ext else path.with_suffix(ext)

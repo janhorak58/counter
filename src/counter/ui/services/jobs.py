@@ -48,6 +48,8 @@ def start_job(
     env_extra: Optional[Dict[str, str]] = None,
 ) -> JobHandle:
     env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
     if env_extra:
         env.update({str(k): str(v) for k, v in env_extra.items()})
 
@@ -57,6 +59,8 @@ def start_job(
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
         "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
         "bufsize": 1,
     }
     if os.name == "posix":
