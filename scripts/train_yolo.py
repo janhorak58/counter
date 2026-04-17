@@ -22,6 +22,10 @@ PROJECT_DIR = Path(__file__).parent.parent
 DATA_YAML = PROJECT_DIR / "data" / "yolo_dataset" / "data.yaml"
 DEFAULT_PROJECT = PROJECT_DIR / "models" / "yolo" / "v1"
 
+# COCO class index pro každou vlastní třídu (tourist, skier, cyclist, tourist_dog)
+# COCO: 0=person, 1=bicycle, 16=dog
+DEFAULT_COCO_MAPPING = [0, 0, 0, 16]
+
 # Dostupne YOLO modely
 AVAILABLE_MODELS = {
     # YOLOv8 varianty
@@ -101,6 +105,89 @@ def generate_run_name(model_name: str, project_dir: Path) -> str:
 
 
 # =============================================================================
+# COCO weight initialization
+# =============================================================================
+
+def init_coco_class_weights(
+    model_path: str,
+    nc: int,
+    coco_mapping: list[int],
+    save_dir: Path | None = None,
+) -> str:
+    """
+    Vytvoří YOLO model s detection headem inicializovaným z COCO vah.
+
+    Namísto náhodné inicializace class head použije váhy z odpovídajících COCO tříd.
+    Funguje pro YOLOv8 a YOLO11 (cv3-based Detect head).
+
+    Returns: cesta k uloženému dočasnému modelu .pt
+    """
+    import torch
+    import torch.nn as nn
+    from copy import deepcopy
+
+    print_info(f"COCO-INIT: načítám {model_path}")
+
+    from ultralytics import YOLO
+    yolo = YOLO(model_path)
+    yolo_model = yolo.model
+
+    detect = yolo_model.model[-1]
+    old_nc = getattr(detect, "nc", None)
+    if old_nc is None:
+        raise ValueError("Detect head nemá atribut 'nc' — nepodporovaná architektura")
+    if not hasattr(detect, "cv3"):
+        raise ValueError(
+            f"Detect head nemá 'cv3' — architektura není YOLOv8/YOLO11. "
+            f"Typ: {type(detect).__name__}"
+        )
+    if max(coco_mapping) >= old_nc:
+        raise ValueError(
+            f"COCO mapping {coco_mapping} vyžaduje index až {max(coco_mapping)}, "
+            f"ale model má pouze {old_nc} tříd"
+        )
+
+    print_info(f"COCO-INIT: {old_nc} → {nc} tříd, mapování COCO indexů: {coco_mapping}")
+
+    for i, seq in enumerate(detect.cv3):
+        # Najdi poslední nn.Conv2d (ne Ultralytics Conv wrapper)
+        last_idx, last_conv = None, None
+        for j, layer in enumerate(seq):
+            if isinstance(layer, nn.Conv2d):
+                last_idx, last_conv = j, layer
+
+        if last_conv is None:
+            raise ValueError(f"cv3[{i}]: nenalezena nn.Conv2d")
+        if last_conv.out_channels != old_nc:
+            raise ValueError(
+                f"cv3[{i}]: výstupní kanály={last_conv.out_channels}, očekáváno {old_nc}"
+            )
+
+        new_conv = nn.Conv2d(last_conv.in_channels, nc, 1, bias=True)
+        new_conv.weight.data = last_conv.weight.data[coco_mapping].clone()
+        if last_conv.bias is not None:
+            new_conv.bias.data = last_conv.bias.data[coco_mapping].clone()
+        seq[last_idx] = new_conv
+        print_info(f"COCO-INIT: cv3[{i}]  {old_nc}→{nc} (COCO indices {coco_mapping})")
+
+    detect.nc = nc
+    yolo_model.nc = nc
+    if hasattr(yolo_model, "yaml") and isinstance(yolo_model.yaml, dict):
+        yolo_model.yaml["nc"] = nc
+
+    # Ulož do trvalého souboru vedle ostatních modelů
+    if save_dir is None:
+        save_dir = PROJECT_DIR / "models" / "_temp"
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    base = Path(model_path).stem
+    save_path = save_dir / f"{base}_coco_init_{nc}cls.pt"
+    torch.save({"model": deepcopy(yolo_model).half()}, save_path)
+    print_info(f"COCO-INIT: uloženo → {save_path}")
+    return str(save_path)
+
+
+# =============================================================================
 # Training
 # =============================================================================
 
@@ -115,12 +202,15 @@ def train(
     name: str | None = None,
     resume: str | None = None,
     patience: int = 50,
+    data_yaml: Path | None = None,
     optimizer: str = "auto",
     lr0: float = 0.01,
     lrf: float = 0.01,
     momentum: float = 0.937,
     weight_decay: float = 0.0005,
     warmup_epochs: float = 3.0,
+    coco_init: bool = False,
+    coco_mapping: list[int] | None = None,
     # Color/HSV augmentations
     hsv_h: float = 0.015,
     hsv_s: float = 0.7,
@@ -168,7 +258,16 @@ def train(
             sys.exit(1)
         model_path = AVAILABLE_MODELS[model_name]
         print_info(f"Model: {model_name} ({model_path})")
-    
+
+    # COCO weight initialization
+    if coco_init and not resume:
+        mapping = coco_mapping if coco_mapping is not None else DEFAULT_COCO_MAPPING
+        model_path = init_coco_class_weights(
+            model_path=model_path,
+            nc=4,
+            coco_mapping=mapping,
+        )
+
     # Generate run name if not provided
     if name is None:
         name = generate_run_name(model_name, project)
@@ -352,6 +451,27 @@ Examples:
     parser.add_argument("--cache", action="store_true", help="Cache images for faster training")
     parser.add_argument("--freeze", type=int, default=None, help="Freeze first N layers")
     parser.add_argument("--no-pretrained", action="store_true", help="Train from scratch")
+
+    # COCO weight initialization
+    parser.add_argument(
+        "--coco-init",
+        action="store_true",
+        help=(
+            "Inicializuj class head z COCO vah místo náhodné inicializace. "
+            "Funguje pouze s COCO-pretrained modely (80 tříd)."
+        ),
+    )
+    parser.add_argument(
+        "--coco-mapping",
+        type=int,
+        nargs=4,
+        default=None,
+        metavar=("TOURIST", "SKIER", "CYCLIST", "DOG"),
+        help=(
+            f"COCO class index pro každou ze 4 tříd "
+            f"(výchozí: {DEFAULT_COCO_MAPPING} = person,person,person,dog)"
+        ),
+    )
     
     args = parser.parse_args()
     
@@ -413,6 +533,8 @@ Examples:
         freeze=args.freeze,
         amp=args.amp,
         cos_lr=args.cos_lr,
+        coco_init=args.coco_init,
+        coco_mapping=args.coco_mapping,
     )
 
 

@@ -37,6 +37,10 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DATASET = PROJECT_DIR / "data" / "coco_dataset"
 DEFAULT_PROJECT = PROJECT_DIR / "models" / "rfdetr" / "v1"
 
+# COCO 91-class 1-indexed category IDs pro každou vlastní třídu
+# COCO: 1=person, 2=bicycle, 18=dog  (pozor: jiné indexování než YOLO!)
+DEFAULT_COCO_MAPPING_RFDETR = [1, 1, 2, 18]  # tourist, skier, cyclist, tourist_dog
+
 
 # =============================================================================
 # Utility
@@ -144,6 +148,70 @@ def generate_run_name(model_name: str, project_dir: Path) -> str:
 
     next_version = max(versions) + 1 if versions else 1
     return f"{base_name}_v{next_version}"
+
+
+# =============================================================================
+# COCO weight initialization
+# =============================================================================
+
+def init_rfdetr_coco_class_weights(
+    rfdetr_model,
+    nc: int,
+    coco_mapping: list[int],
+) -> None:
+    """
+    Inicializuje RF-DETR classification head z COCO vah in-place.
+
+    RF-DETR interně přidává +1 třídu pro background, takže pro nc=4 vlastních
+    tříd vytvoříme head s nc+1=5 výstupy: [0=bg, 1=tourist, 2=skier, 3=cyclist, 4=dog].
+
+    Funguje pro LWDETR architekturu (RF-DETR Small/Medium/Large).
+    Musí být voláno PŘED model.train() — rfdetr zavolá reinitialize_detection_head(nc+1)
+    automaticky, ale protože head má již nc+1 výstupů, je to no-op.
+
+    coco_mapping: COCO 91-class 1-indexed category ID pro každou vlastní třídu
+                  výchozí: [1, 1, 2, 18] = person, person, bicycle, dog
+    """
+    import torch.nn as nn
+
+    lwdetr = rfdetr_model.model.model
+    if not hasattr(lwdetr, "class_embed") or not isinstance(lwdetr.class_embed, nn.Linear):
+        raise ValueError(
+            f"Nepodporovaná architektura: class_embed není nn.Linear "
+            f"(typ: {type(getattr(lwdetr, 'class_embed', None)).__name__})"
+        )
+
+    old_nc = lwdetr.class_embed.out_features
+    full_mapping = [0] + list(coco_mapping)  # prepend background (index 0)
+    new_nc = len(full_mapping)               # = nc + 1
+
+    if max(full_mapping) >= old_nc:
+        raise ValueError(
+            f"COCO mapping {coco_mapping} vyžaduje index až {max(full_mapping)}, "
+            f"ale model má {old_nc} tříd. "
+            f"Použij 1-indexed COCO category IDs (person=1, bicycle=2, dog=18)."
+        )
+
+    print_info(f"COCO-INIT RF-DETR: {old_nc} COCO → {new_nc} tříd (bg + {nc})")
+    print_info(f"COCO-INIT RF-DETR: full mapping = {full_mapping}")
+
+    def _remap(linear: nn.Linear) -> nn.Linear:
+        new = nn.Linear(linear.in_features, new_nc, bias=True)
+        new.weight.data = linear.weight.data[full_mapping].clone()
+        new.bias.data = linear.bias.data[full_mapping].clone()
+        return new
+
+    lwdetr.class_embed = _remap(lwdetr.class_embed)
+    print_info("COCO-INIT RF-DETR: class_embed ✓")
+
+    two_stage = getattr(lwdetr, "two_stage", False)
+    if two_stage:
+        enc_embeds = getattr(lwdetr.transformer, "enc_out_class_embed", None)
+        if enc_embeds is not None:
+            for i, enc in enumerate(enc_embeds):
+                if isinstance(enc, nn.Linear) and enc.out_features == old_nc:
+                    enc_embeds[i] = _remap(enc)
+            print_info(f"COCO-INIT RF-DETR: {len(enc_embeds)}x enc_out_class_embed ✓")
 
 
 # =============================================================================
@@ -409,6 +477,9 @@ def train(
     wandb_run: str | None = None,
     seed: int = 42,
     scratch_dir: Path | None = None,
+    # COCO weight initialization
+    coco_init: bool = False,
+    coco_mapping: list[int] | None = None,
     # Augmentation
     augs: str = "max",  # none|default|max
     print_augs: bool = False,
@@ -586,16 +657,25 @@ def train(
     logging.getLogger("PIL").setLevel(logging.WARNING)
 
     # Init model
-    print(f"Initializing model...")
+    print_info(f"Initializing model...")
     model_class = model_classes[model_name]
     if resume:
-        print(f"Resuming from: {resume}")
+        print_info(f"Resuming from: {resume}")
         try:
-            model = model_class(pretrained_weights=resume)  # older/newer variants
+            model = model_class(pretrained_weights=resume)
         except TypeError:
-            model = model_class(weights=resume)  # fallback
+            model = model_class(weights=resume)
     else:
         model = model_class()
+
+    # COCO weight initialization
+    if coco_init and not resume:
+        mapping = coco_mapping if coco_mapping is not None else DEFAULT_COCO_MAPPING_RFDETR
+        init_rfdetr_coco_class_weights(
+            rfdetr_model=model,
+            nc=4,
+            coco_mapping=mapping,
+        )
 
     # Train
     print(f"\n{'='*70}")
@@ -732,6 +812,28 @@ def main():
     parser.add_argument("--early-stopping-min-delta", type=float, default=0.001)
     parser.add_argument("--early-stopping-use-ema", action=argparse.BooleanOptionalAction, default=False)
 
+    # COCO weight initialization
+    parser.add_argument(
+        "--coco-init",
+        action="store_true",
+        help=(
+            "Inicializuj class head z COCO vah místo náhodné inicializace. "
+            "Pouze pro modely přetrénované na COCO (91 tříd). "
+            "POZOR: RF-DETR používá 1-indexed COCO category IDs (person=1, bicycle=2, dog=18)."
+        ),
+    )
+    parser.add_argument(
+        "--coco-mapping",
+        type=int,
+        nargs=4,
+        default=None,
+        metavar=("TOURIST", "SKIER", "CYCLIST", "DOG"),
+        help=(
+            f"COCO category ID (1-indexed) pro každou ze 4 tříd "
+            f"(výchozí: {DEFAULT_COCO_MAPPING_RFDETR} = person,person,bicycle,dog)"
+        ),
+    )
+
     # Augmentace
     parser.add_argument("--augs", type=str, choices=["none", "default", "max"], default="max",
                         help="Aug preset: none(default rfdetr), default(default rfdetr), max(patch + extra augs)")
@@ -797,6 +899,8 @@ def main():
         wandb_run=args.wandb_run,
         seed=args.seed,
         scratch_dir=Path(args.scratch) if args.scratch else None,
+        coco_init=args.coco_init,
+        coco_mapping=args.coco_mapping,
         augs=args.augs,
         print_augs=args.print_augs,
         aug_hflip_p=args.aug_hflip_p,
