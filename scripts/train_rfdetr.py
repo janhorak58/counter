@@ -34,7 +34,7 @@ from typing import Any, Callable
 # =============================================================================
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DATASET = PROJECT_DIR / "data" / "coco_dataset"
+DEFAULT_DATASET = PROJECT_DIR / "data" / "dataset_coco_v4s"
 DEFAULT_PROJECT = PROJECT_DIR / "models" / "rfdetr" / "v1"
 
 # COCO 91-class 1-indexed category IDs pro každou vlastní třídu

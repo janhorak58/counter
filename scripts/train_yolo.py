@@ -19,7 +19,7 @@ from pathlib import Path
 # =============================================================================
 
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_YAML = PROJECT_DIR / "data" / "yolo_dataset" / "data.yaml"
+DATA_YAML = PROJECT_DIR / "data" / "dataset_yolo_v4s" / "data.yaml"
 DEFAULT_PROJECT = PROJECT_DIR / "models" / "yolo" / "v1"
 
 # COCO class index pro každou vlastní třídu (tourist, skier, cyclist, tourist_dog)
@@ -274,25 +274,26 @@ def train(
     
     print_info(f"Run name: {name}")
     print_info(f"Project: {project}")
-    print_info(f"Dataset: {DATA_YAML}")
+    resolved_data = data_yaml if data_yaml is not None else DATA_YAML
+    print_info(f"Dataset: {resolved_data}")
     print_info(f"Epochs: {epochs}")
     print_info(f"Batch size: {batch_size}")
     print_info(f"Image size: {imgsz}")
     print_info(f"Device: {device}")
     print_info(f"Workers: {workers}")
     print_info(f"Patience: {patience}")
-    
+
     # Check data.yaml exists
-    if not DATA_YAML.exists():
-        print_error(f"Dataset config not found: {DATA_YAML}")
+    if not resolved_data.exists():
+        print_error(f"Dataset config not found: {resolved_data}")
         sys.exit(1)
-    
+
     # Load model
     model = YOLO(model_path)
-    
+
     # Build training arguments
     train_args = {
-        "data": str(DATA_YAML),
+        "data": str(resolved_data),
         "epochs": epochs,
         "batch": batch_size,
         "imgsz": imgsz,
@@ -393,6 +394,9 @@ Examples:
         help="List available models and exit"
     )
     
+    # Dataset
+    parser.add_argument("--data", type=str, default=None, help="Path to data.yaml (default: data/dataset_yolo_v4s/data.yaml)")
+
     # Training parameters
     parser.add_argument("--epochs", "-e", type=int, default=100, help="Number of epochs (default: 100)")
     parser.add_argument("--batch", "-b", type=int, default=16, help="Batch size (default: 16)")
@@ -533,6 +537,7 @@ Examples:
         freeze=args.freeze,
         amp=args.amp,
         cos_lr=args.cos_lr,
+        data_yaml=Path(args.data) if args.data else None,
         coco_init=args.coco_init,
         coco_mapping=args.coco_mapping,
     )
