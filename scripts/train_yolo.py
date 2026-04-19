@@ -288,6 +288,17 @@ def train(
         print_error(f"Dataset config not found: {resolved_data}")
         sys.exit(1)
 
+    # Patch data.yaml: ensure path field is absolute (Ultralytics resolves relative path from CWD)
+    import yaml as _yaml
+    with open(resolved_data) as _f:
+        _cfg = _yaml.safe_load(_f)
+    _p = _cfg.get("path", ".")
+    if not Path(_p).is_absolute():
+        _cfg["path"] = str((resolved_data.parent / _p).resolve())
+        with open(resolved_data, "w") as _f:
+            _yaml.dump(_cfg, _f, default_flow_style=False, allow_unicode=True)
+        print_info(f"data.yaml path patched → {_cfg['path']}")
+
     # Load model
     model = YOLO(model_path)
 
