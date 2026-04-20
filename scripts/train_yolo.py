@@ -14,6 +14,19 @@ import argparse
 import sys
 from pathlib import Path
 
+
+class _TeeStream:
+    def __init__(self, *streams):
+        self._streams = streams
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+    def fileno(self):
+        return self._streams[0].fileno()
+
 # =============================================================================
 # Konfigurace
 # =============================================================================
@@ -23,8 +36,8 @@ DATA_YAML = PROJECT_DIR / "data" / "dataset_yolo_v4s" / "data.yaml"
 DEFAULT_PROJECT = PROJECT_DIR / "models" / "yolo" / "v1"
 
 # COCO class index pro každou vlastní třídu (tourist, skier, cyclist, tourist_dog)
-# COCO: 0=person, 1=bicycle, 16=dog
-DEFAULT_COCO_MAPPING = [0, 0, 0, 16]
+# COCO 0-indexed: 0=person, 1=bicycle, 16=dog, 30=skis
+DEFAULT_COCO_MAPPING = [0, 30, 1, 16]
 
 # Dostupne YOLO modely
 AVAILABLE_MODELS = {
@@ -365,9 +378,24 @@ def train(
     
     print_info("Starting training...")
     print("")
-    
-    # Train
-    results = model.train(**train_args)
+
+    # Redirect stdout+stderr to log file in the run directory
+    import sys as _sys
+    log_dir = Path(project) / name
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "train.log"
+    print_info(f"Log: {log_path}")
+    _log_fh = open(log_path, "w", buffering=1)
+    _tee_out = _TeeStream(_sys.stdout, _log_fh)
+    _tee_err = _TeeStream(_sys.stderr, _log_fh)
+    _orig_out, _orig_err = _sys.stdout, _sys.stderr
+    _sys.stdout, _sys.stderr = _tee_out, _tee_err
+
+    try:
+        results = model.train(**train_args)
+    finally:
+        _sys.stdout, _sys.stderr = _orig_out, _orig_err
+        _log_fh.close()
     
     print_header("Training Complete!")
     print_info(f"Results saved to: {project / name}")
